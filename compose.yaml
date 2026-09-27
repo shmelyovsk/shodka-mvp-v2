@@ -1,0 +1,30 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      PORT: 3000
+      WEB_ORIGIN: http://localhost:8080
+      DATA_FILE: /app/data/db.json
+      MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
+      MAX_BOT_API_URL: ${MAX_BOT_API_URL:-}
+      MINI_APP_URL: ${MINI_APP_URL:-http://localhost:8080}
+    volumes:
+      - shodka_data:/app/data
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  shodka_data:

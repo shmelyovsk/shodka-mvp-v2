@@ -1,0 +1,70 @@
+{
+  "users": [
+    { "id": "user-1", "name": "Ира", "ageGroup": "18-25" },
+    { "id": "user-2", "name": "Саша", "ageGroup": "18-25" },
+    { "id": "user-3", "name": "Лена", "ageGroup": "16-17" }
+  ],
+  "activities": [
+    {
+      "id": "activity-1",
+      "title": "Настольный теннис после учёбы",
+      "sport": "Настольный теннис",
+      "date": "2026-09-28T18:00:00+03:00",
+      "durationMinutes": 60,
+      "district": "Сокол",
+      "publicPlace": "Спортивный центр рядом с метро Сокол",
+      "exactAddress": "Москва, Ленинградский проспект, 75",
+      "level": "beginner",
+      "capacity": 4,
+      "approvedCount": 1,
+      "price": 350,
+      "equipment": "Ракетки можно взять на месте",
+      "description": "Играем спокойно, подойдёт тем, кто недавно начал.",
+      "ageGroup": "16–25",
+      "organizerId": "user-2",
+      "status": "open",
+      "createdAt": "2026-09-27T12:00:00Z"
+    },
+    {
+      "id": "activity-2",
+      "title": "Вечерняя пробежка в парке",
+      "sport": "Бег",
+      "date": "2026-09-29T19:00:00+03:00",
+      "durationMinutes": 45,
+      "district": "Раменки",
+      "publicPlace": "Парк 50-летия Октября",
+      "exactAddress": "Главный вход со стороны улицы Удальцова",
+      "level": "any",
+      "capacity": 8,
+      "approvedCount": 2,
+      "price": 0,
+      "equipment": "Удобная спортивная обувь",
+      "description": "Темп согласуем на месте, дистанция около 4 км.",
+      "ageGroup": "16+",
+      "organizerId": "user-2",
+      "status": "open",
+      "createdAt": "2026-09-27T12:10:00Z"
+    },
+    {
+      "id": "activity-3",
+      "title": "Волейбол для любителей",
+      "sport": "Волейбол",
+      "date": "2026-10-01T17:30:00+03:00",
+      "durationMinutes": 90,
+      "district": "Хамовники",
+      "publicPlace": "Открытая спортивная площадка",
+      "exactAddress": "Москва, улица Усачёва, 10",
+      "level": "intermediate",
+      "capacity": 10,
+      "approvedCount": 6,
+      "price": 0,
+      "equipment": "Мяч уже есть",
+      "description": "Нужны ещё четыре человека для игры 5 на 5.",
+      "ageGroup": "18–25",
+      "organizerId": "user-2",
+      "status": "open",
+      "createdAt": "2026-09-27T12:20:00Z"
+    }
+  ],
+  "applications": []
+}
