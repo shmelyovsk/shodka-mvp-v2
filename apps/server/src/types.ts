@@ -6,6 +6,8 @@ export interface User {
   name: string;
   ageGroup: "16-17" | "18-25" | "26+";
   avatarUrl?: string;
+  rating?: number;
+  reviewsCount?: number;
 }
 
 export interface Activity {

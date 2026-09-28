@@ -46,6 +46,25 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function reminderLabel(value: string) {
+  const activityDate = new Date(value);
+  const today = startOfDay(new Date());
+  const activityDay = startOfDay(activityDate);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const days = Math.round((activityDay.getTime() - today.getTime()) / 86_400_000);
+  if (days === 0) return `Сегодня в ${formatTime(value)}`;
+  if (days === 1) return `Завтра в ${formatTime(value)}`;
+  return `Через ${days} дн. · ${formatDate(value)}`;
+}
+
 function minimumDateTime() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
@@ -55,6 +74,11 @@ function minimumDateTime() {
 function PersonAvatar({ name, avatarUrl, size = "small" }: { name: string; avatarUrl?: string; size?: "small" | "large" }) {
   if (avatarUrl) return <img className={`person-avatar ${size}`} src={avatarUrl} alt={`Аватар: ${name}`} />;
   return <span className={`person-avatar fallback ${size}`}>{name.slice(0, 1)}</span>;
+}
+
+function RatingBadge({ rating, reviewsCount }: { rating?: number; reviewsCount?: number }) {
+  if (rating === undefined) return <span className="rating-badge new-user">Новый участник</span>;
+  return <span className="rating-badge">★ {rating.toFixed(1)} · {reviewsCount ?? 0} отзывов</span>;
 }
 
 function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => void }) {
@@ -71,7 +95,7 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
       {activity.organizer && (
         <div className="organizer-inline">
           <PersonAvatar name={activity.organizer.name} avatarUrl={activity.organizer.avatarUrl} />
-          <span>Организатор <strong>{activity.organizer.name}</strong></span>
+          <span>Организатор <strong>{activity.organizer.name}</strong><RatingBadge rating={activity.organizer.rating} reviewsCount={activity.organizer.reviewsCount} /></span>
         </div>
       )}
       <div className="card-footer">
@@ -135,6 +159,13 @@ function App() {
     const matchesPlace = !placeQuery || `${item.district} ${item.publicPlace}`.toLocaleLowerCase("ru").includes(placeQuery);
     return matchesSport && matchesDateFilter(item.date, dateFilter) && matchesPlace;
   });
+  const reminders = mine
+    .filter((item) => item.relation === "organizer" || item.applicationStatus === "approved")
+    .filter((item) => {
+      const remaining = new Date(item.date).getTime() - Date.now();
+      return remaining >= 0 && remaining <= 7 * 86_400_000;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   async function openActivity(id: string) {
     try {
@@ -280,6 +311,17 @@ function App() {
 
         {tab === "mine" && (
           <section>
+            {!!reminders.length && (
+              <div className="reminders">
+                <div className="section-heading"><h2>Не забудьте</h2><span>{reminders.length}</span></div>
+                {reminders.map((item) => (
+                  <button className="reminder-card" key={item.id} onClick={() => void openActivity(item.id)}>
+                    <span className="reminder-icon">⏰</span>
+                    <span><strong>{reminderLabel(item.date)}</strong><small>{item.title} · {item.district}</small></span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="section-heading"><h2>Мои сходки</h2><span>{mine.length}</span></div>
             <div className="activity-list">
               {mine.map((item) => <ActivityCard key={item.id} activity={item} onOpen={() => void openActivity(item.id)} />)}
@@ -297,7 +339,7 @@ function App() {
                   <span className="sport-pill">{application.activity?.sport ?? "Спорт"}</span>
                   <div className="request-person">
                     <PersonAvatar name={application.user?.name ?? "Участник"} avatarUrl={application.user?.avatarUrl} size="large" />
-                    <h3>{application.user?.name ?? "Участник"}</h3>
+                    <div><h3>{application.user?.name ?? "Участник"}</h3><RatingBadge rating={application.user?.rating} reviewsCount={application.user?.reviewsCount} /></div>
                   </div>
                   <p className="meta">Хочет присоединиться к «{application.activity?.title ?? "сходке"}»</p>
                   <p className="meta">Возрастная группа: {application.user?.ageGroup ?? "не указана"}</p>
@@ -336,7 +378,7 @@ function App() {
             {selected.organizer && (
               <div className="organizer-profile">
                 <PersonAvatar name={selected.organizer.name} avatarUrl={selected.organizer.avatarUrl} size="large" />
-                <div><span>Организатор</span><strong>{selected.organizer.name}</strong></div>
+                <div><span>Организатор</span><strong>{selected.organizer.name}</strong><RatingBadge rating={selected.organizer.rating} reviewsCount={selected.organizer.reviewsCount} /></div>
               </div>
             )}
             <dl>

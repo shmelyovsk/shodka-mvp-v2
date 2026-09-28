@@ -20,6 +20,8 @@ export interface Activity {
     name: string;
     ageGroup: string;
     avatarUrl?: string;
+    rating?: number;
+    reviewsCount?: number;
   };
   status: "open" | "full" | "cancelled";
   relation?: "organizer" | "participant";
@@ -38,5 +40,7 @@ export interface OrganizerApplication {
     name: string;
     ageGroup: string;
     avatarUrl?: string;
+    rating?: number;
+    reviewsCount?: number;
   };
 }

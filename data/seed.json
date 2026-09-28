@@ -1,8 +1,8 @@
 {
   "users": [
-    { "id": "user-1", "name": "Ира", "ageGroup": "18-25", "avatarUrl": "/avatars/ira.svg" },
-    { "id": "user-2", "name": "Саша", "ageGroup": "18-25", "avatarUrl": "/avatars/sasha.svg" },
-    { "id": "user-3", "name": "Лена", "ageGroup": "16-17", "avatarUrl": "/avatars/lena.svg" }
+    { "id": "user-1", "name": "Ира", "ageGroup": "18-25", "avatarUrl": "/avatars/ira.svg", "rating": 4.9, "reviewsCount": 8 },
+    { "id": "user-2", "name": "Саша", "ageGroup": "18-25", "avatarUrl": "/avatars/sasha.svg", "rating": 4.8, "reviewsCount": 17 },
+    { "id": "user-3", "name": "Лена", "ageGroup": "16-17", "avatarUrl": "/avatars/lena.svg", "rating": 5, "reviewsCount": 4 }
   ],
   "activities": [
     {
