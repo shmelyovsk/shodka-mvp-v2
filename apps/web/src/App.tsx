@@ -126,15 +126,15 @@ function App() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function loadActivities() {
-    setLoading(true);
+  async function loadActivities(showLoading = true) {
+    if (showLoading) setLoading(true);
     try {
       const data = await api<Activity[]>("/api/activities");
       setActivities(data);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка загрузки");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
@@ -148,7 +148,11 @@ function App() {
     setApplications(data);
   }
 
-  useEffect(() => { void loadActivities(); }, []);
+  useEffect(() => {
+    void loadActivities();
+    const refreshTimer = window.setInterval(() => void loadActivities(false), 60_000);
+    return () => window.clearInterval(refreshTimer);
+  }, []);
   useEffect(() => { if (tab === "mine") void loadMine(); }, [tab, currentUserId]);
   useEffect(() => { if (tab === "requests") void loadApplications(); }, [tab, currentUserId]);
 
@@ -191,6 +195,12 @@ function App() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
+    const localDate = new Date(String(payload.date));
+    if (Number.isNaN(localDate.getTime())) {
+      setMessage("Укажите корректную дату и время");
+      return;
+    }
+    payload.date = localDate.toISOString();
     try {
       await api<Activity>("/api/activities", { method: "POST", body: JSON.stringify(payload) }, currentUserId);
       setMessage("Сходка опубликована");
