@@ -254,6 +254,9 @@ function App() {
             <dl>
               <div><dt>Когда</dt><dd>{formatDate(selected.date)}, {selected.durationMinutes} мин</dd></div>
               <div><dt>Где</dt><dd>{selected.publicPlace}, {selected.district}</dd></div>
+              {selected.exactAddress && (
+                <div><dt>Точный адрес</dt><dd>{selected.exactAddress}</dd></div>
+              )}
               <div><dt>Уровень</dt><dd>{levelNames[selected.level]}</dd></div>
               <div><dt>Возраст</dt><dd>{selected.ageGroup}</dd></div>
               <div><dt>Инвентарь</dt><dd>{selected.equipment}</dd></div>
