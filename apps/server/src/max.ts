@@ -108,7 +108,7 @@ function welcomeExtra() {
   return {
     attachments: [
       Keyboard.inlineKeyboard([
-        [Keyboard.button.openApp("Открыть Сходку", miniAppUrl)],
+        [Keyboard.button.link("Открыть Сходку", miniAppUrl)],
       ]),
     ],
   };
