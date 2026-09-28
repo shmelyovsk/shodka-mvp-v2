@@ -3,6 +3,7 @@ import { api, DEFAULT_USER_ID } from "./api";
 import type { Activity, OrganizerApplication } from "./types";
 
 type Tab = "catalog" | "create" | "requests" | "mine";
+type DateFilter = "all" | "today" | "tomorrow" | "week";
 
 const levelNames = { beginner: "Начинающий", any: "Любой", intermediate: "Средний" };
 const applicationStatusNames = {
@@ -10,6 +11,31 @@ const applicationStatusNames = {
   approved: "Вы участвуете",
   rejected: "Заявка отклонена",
 };
+const dateFilterNames: Record<DateFilter, string> = {
+  all: "Все даты",
+  today: "Сегодня",
+  tomorrow: "Завтра",
+  week: "7 дней",
+};
+
+function startOfDay(value: Date) {
+  const result = new Date(value);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function matchesDateFilter(value: string, filter: DateFilter) {
+  if (filter === "all") return true;
+  const activityDate = startOfDay(new Date(value));
+  const today = startOfDay(new Date());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const weekEnd = new Date(today);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  if (filter === "today") return activityDate.getTime() === today.getTime();
+  if (filter === "tomorrow") return activityDate.getTime() === tomorrow.getTime();
+  return activityDate >= today && activityDate < weekEnd;
+}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -18,6 +44,17 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function minimumDateTime() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function PersonAvatar({ name, avatarUrl, size = "small" }: { name: string; avatarUrl?: string; size?: "small" | "large" }) {
+  if (avatarUrl) return <img className={`person-avatar ${size}`} src={avatarUrl} alt={`Аватар: ${name}`} />;
+  return <span className={`person-avatar fallback ${size}`}>{name.slice(0, 1)}</span>;
 }
 
 function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => void }) {
@@ -31,9 +68,15 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
       <h3>{activity.title}</h3>
       <p className="meta">{formatDate(activity.date)} · {activity.durationMinutes} мин</p>
       <p className="meta">{activity.district} · {activity.publicPlace}</p>
+      {activity.organizer && (
+        <div className="organizer-inline">
+          <PersonAvatar name={activity.organizer.name} avatarUrl={activity.organizer.avatarUrl} />
+          <span>Организатор <strong>{activity.organizer.name}</strong></span>
+        </div>
+      )}
       <div className="card-footer">
         <span>{levelNames[activity.level]}</span>
-        <strong>{activity.price ? `${activity.price} ₽` : "Бесплатно"}</strong>
+        <strong>{activity.price ? `${activity.price} ₽ с человека` : "Бесплатно"}</strong>
       </div>
       {activity.relation && (
         <span className={`relation-status ${activity.applicationStatus ?? "organizer"}`}>
@@ -54,6 +97,8 @@ function App() {
   const [applications, setApplications] = useState<OrganizerApplication[]>([]);
   const [selected, setSelected] = useState<Activity | null>(null);
   const [sport, setSport] = useState("Все");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [place, setPlace] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -84,7 +129,12 @@ function App() {
   useEffect(() => { if (tab === "requests") void loadApplications(); }, [tab, currentUserId]);
 
   const sports = useMemo(() => ["Все", ...Array.from(new Set(activities.map((item) => item.sport)))], [activities]);
-  const visible = sport === "Все" ? activities : activities.filter((item) => item.sport === sport);
+  const visible = activities.filter((item) => {
+    const matchesSport = sport === "Все" || item.sport === sport;
+    const placeQuery = place.trim().toLocaleLowerCase("ru");
+    const matchesPlace = !placeQuery || `${item.district} ${item.publicPlace}`.toLocaleLowerCase("ru").includes(placeQuery);
+    return matchesSport && matchesDateFilter(item.date, dateFilter) && matchesPlace;
+  });
 
   async function openActivity(id: string) {
     try {
@@ -118,6 +168,19 @@ function App() {
       setTab("mine");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось создать сходку");
+    }
+  }
+
+  async function cancelActivity() {
+    if (!selected || !window.confirm("Отменить эту сходку? Она исчезнет из активных списков.")) return;
+    try {
+      await api(`/api/activities/${selected.id}/cancel`, { method: "POST" }, currentUserId);
+      setMessage("Сходка отменена");
+      setSelected(null);
+      await loadActivities();
+      if (tab === "mine") await loadMine();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось отменить сходку");
     }
   }
 
@@ -169,13 +232,29 @@ function App() {
               <h2>Найди компанию для спорта рядом</h2>
               <button className="primary" onClick={() => setTab("create")}>Создать сходку</button>
             </section>
-            <div className="chips">
-              {sports.map((item) => <button className={sport === item ? "chip active" : "chip"} onClick={() => setSport(item)} key={item}>{item}</button>)}
+            <div className="filter-group">
+              <span className="filter-label">Когда</span>
+              <div className="chips compact">
+                {(Object.keys(dateFilterNames) as DateFilter[]).map((item) => (
+                  <button className={dateFilter === item ? "chip active" : "chip"} onClick={() => setDateFilter(item)} key={item}>{dateFilterNames[item]}</button>
+                ))}
+              </div>
             </div>
+            <div className="filter-group">
+              <span className="filter-label">Вид спорта</span>
+              <div className="chips compact">
+                {sports.map((item) => <button className={sport === item ? "chip active" : "chip"} onClick={() => setSport(item)} key={item}>{item}</button>)}
+              </div>
+            </div>
+            <label className="place-filter">
+              <span className="filter-label">Где</span>
+              <input value={place} onChange={(event) => setPlace(event.target.value)} placeholder="Район, метро или место" />
+            </label>
             <section className="section-heading"><h2>Ближайшие сходки</h2><span>{visible.length}</span></section>
             {loading ? <p className="empty">Загружаем активности…</p> : (
               <div className="activity-list">
                 {visible.map((item) => <ActivityCard key={item.id} activity={item} onOpen={() => void openActivity(item.id)} />)}
+                {!visible.length && <p className="empty">По выбранным фильтрам сходок пока нет.</p>}
               </div>
             )}
           </>
@@ -187,11 +266,11 @@ function App() {
             <form className="form" onSubmit={createActivity}>
               <label>Название<input required name="title" placeholder="Волейбол после пар" /></label>
               <label>Вид спорта<select required name="sport" defaultValue=""><option value="" disabled>Выберите</option><option>Бег</option><option>Настольный теннис</option><option>Волейбол</option><option>Баскетбол</option><option>Футбол</option><option>Бадминтон</option><option>Велосипед</option></select></label>
-              <label>Дата и время<input required type="datetime-local" name="date" /></label>
+              <label>Дата и время<input required type="datetime-local" name="date" min={minimumDateTime()} /></label>
               <div className="form-row"><label>Район<input required name="district" placeholder="Сокол" /></label><label>Участников<input required type="number" min="2" max="30" name="capacity" defaultValue="4" /></label></div>
               <label>Публичное место<input required name="publicPlace" placeholder="Спортивный центр рядом с метро" /></label>
               <label>Точный адрес<input name="exactAddress" placeholder="Увидят только подтверждённые участники" /></label>
-              <div className="form-row"><label>Уровень<select name="level" defaultValue="any"><option value="beginner">Начинающий</option><option value="any">Любой</option><option value="intermediate">Средний</option></select></label><label>Стоимость, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
+              <div className="form-row"><label>Уровень<select name="level" defaultValue="any"><option value="beginner">Начинающий</option><option value="any">Любой</option><option value="intermediate">Средний</option></select></label><label>С человека, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
               <label>Инвентарь<input name="equipment" placeholder="Мяч уже есть" /></label>
               <label>Описание<textarea name="description" rows={3} placeholder="Расскажите о формате встречи" /></label>
               <button className="primary full" type="submit">Опубликовать</button>
@@ -216,7 +295,10 @@ function App() {
               {applications.map((application) => (
                 <article className="request-card" key={application.id}>
                   <span className="sport-pill">{application.activity?.sport ?? "Спорт"}</span>
-                  <h3>{application.user?.name ?? "Участник"}</h3>
+                  <div className="request-person">
+                    <PersonAvatar name={application.user?.name ?? "Участник"} avatarUrl={application.user?.avatarUrl} size="large" />
+                    <h3>{application.user?.name ?? "Участник"}</h3>
+                  </div>
                   <p className="meta">Хочет присоединиться к «{application.activity?.title ?? "сходке"}»</p>
                   <p className="meta">Возрастная группа: {application.user?.ageGroup ?? "не указана"}</p>
                   {application.status === "pending" ? (
@@ -251,6 +333,12 @@ function App() {
             <span className="sport-pill">{selected.sport}</span>
             <h2>{selected.title}</h2>
             <p className="modal-lead">{selected.description}</p>
+            {selected.organizer && (
+              <div className="organizer-profile">
+                <PersonAvatar name={selected.organizer.name} avatarUrl={selected.organizer.avatarUrl} size="large" />
+                <div><span>Организатор</span><strong>{selected.organizer.name}</strong></div>
+              </div>
+            )}
             <dl>
               <div><dt>Когда</dt><dd>{formatDate(selected.date)}, {selected.durationMinutes} мин</dd></div>
               <div><dt>Где</dt><dd>{selected.publicPlace}, {selected.district}</dd></div>
@@ -260,8 +348,11 @@ function App() {
               <div><dt>Уровень</dt><dd>{levelNames[selected.level]}</dd></div>
               <div><dt>Возраст</dt><dd>{selected.ageGroup}</dd></div>
               <div><dt>Инвентарь</dt><dd>{selected.equipment}</dd></div>
-              <div><dt>Стоимость</dt><dd>{selected.price ? `${selected.price} ₽` : "Бесплатно"}</dd></div>
+              <div><dt>Стоимость</dt><dd>{selected.price ? `${selected.price} ₽ с человека` : "Бесплатно"}</dd></div>
             </dl>
+            {selected.organizerId === currentUserId && selected.status !== "cancelled" && (
+              <button className="secondary danger full" onClick={() => void cancelActivity()}>Отменить сходку</button>
+            )}
             {selected.organizerId !== currentUserId && <button className="primary full" disabled={selected.status !== "open"} onClick={() => void joinActivity()}>Подать заявку</button>}
           </article>
         </div>

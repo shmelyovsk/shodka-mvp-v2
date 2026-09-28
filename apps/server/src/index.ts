@@ -36,11 +36,15 @@ app.get("/api/activities", async (req, res, next) => {
     const level = String(req.query.level ?? "");
     const activities = db.activities
       .filter((item) => item.status !== "cancelled")
+      .filter((item) => new Date(item.date).getTime() >= Date.now())
       .filter((item) => !sport || item.sport.toLowerCase() === sport)
       .filter((item) => !district || item.district.toLowerCase().includes(district))
       .filter((item) => !level || item.level === level)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .map(({ exactAddress: _hidden, ...item }) => item);
+      .map(({ exactAddress: _hidden, ...item }) => ({
+        ...item,
+        organizer: db.users.find((user) => user.id === item.organizerId),
+      }));
     res.json(activities);
   } catch (error) {
     next(error);
@@ -59,7 +63,11 @@ app.get("/api/activities/:id", async (req, res, next) => {
     );
     const maySeeAddress = approved || activity.organizerId === userId;
     const { exactAddress, ...publicActivity } = activity;
-    res.json(maySeeAddress ? activity : publicActivity);
+    const visibleActivity = maySeeAddress ? activity : publicActivity;
+    res.json({
+      ...visibleActivity,
+      organizer: db.users.find((user) => user.id === activity.organizerId),
+    });
   } catch (error) {
     next(error);
   }
@@ -71,6 +79,13 @@ app.post("/api/activities", async (req, res, next) => {
     const required = ["title", "sport", "date", "district", "publicPlace", "level", "capacity"];
     const missing = required.filter((key) => !req.body[key]);
     if (missing.length) return res.status(400).json({ message: `Заполните поля: ${missing.join(", ")}` });
+    const activityDate = new Date(String(req.body.date));
+    if (Number.isNaN(activityDate.getTime())) {
+      return res.status(400).json({ message: "Укажите корректную дату и время" });
+    }
+    if (activityDate.getTime() <= Date.now()) {
+      return res.status(400).json({ message: "Нельзя создать сходку на прошедшую дату" });
+    }
 
     const activity: Activity = {
       id: nanoid(),
@@ -134,12 +149,21 @@ app.get("/api/users/:userId/activities", async (req, res, next) => {
     const applications = db.applications.filter((item) => item.userId === req.params.userId);
     const appliedIds = new Set(applications.map((item) => item.activityId));
     const activities = db.activities
+      .filter((item) => item.status !== "cancelled")
+      .filter((item) => new Date(item.date).getTime() >= Date.now())
       .filter((item) => item.organizerId === req.params.userId || appliedIds.has(item.id))
-      .map((activity) => ({
-        ...activity,
-        relation: activity.organizerId === req.params.userId ? "organizer" : "participant",
-        applicationStatus: applications.find((item) => item.activityId === activity.id)?.status,
-      }));
+      .map((activity) => {
+        const applicationStatus = applications.find((item) => item.activityId === activity.id)?.status;
+        const isOrganizer = activity.organizerId === req.params.userId;
+        const maySeeAddress = isOrganizer || applicationStatus === "approved";
+        const { exactAddress, ...publicActivity } = activity;
+        return {
+          ...(maySeeAddress ? activity : publicActivity),
+          organizer: db.users.find((user) => user.id === activity.organizerId),
+          relation: isOrganizer ? "organizer" : "participant",
+          applicationStatus,
+        };
+      });
     res.json(activities);
   } catch (error) {
     next(error);

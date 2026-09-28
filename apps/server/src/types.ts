@@ -5,6 +5,7 @@ export interface User {
   id: string;
   name: string;
   ageGroup: "16-17" | "18-25" | "26+";
+  avatarUrl?: string;
 }
 
 export interface Activity {

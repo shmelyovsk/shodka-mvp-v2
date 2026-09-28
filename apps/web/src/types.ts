@@ -15,6 +15,12 @@ export interface Activity {
   description: string;
   ageGroup: string;
   organizerId: string;
+  organizer?: {
+    id: string;
+    name: string;
+    ageGroup: string;
+    avatarUrl?: string;
+  };
   status: "open" | "full" | "cancelled";
   relation?: "organizer" | "participant";
   applicationStatus?: "pending" | "approved" | "rejected";
@@ -31,5 +37,6 @@ export interface OrganizerApplication {
     id: string;
     name: string;
     ageGroup: string;
+    avatarUrl?: string;
   };
 }
