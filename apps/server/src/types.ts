@@ -4,7 +4,7 @@ export type ApplicationStatus = "pending" | "approved" | "rejected";
 export interface User {
   id: string;
   name: string;
-  ageGroup: "16-17" | "18-25" | "26+";
+  ageGroup: "16+";
   avatarUrl?: string;
   rating?: number;
   reviewsCount?: number;

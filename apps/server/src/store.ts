@@ -25,7 +25,12 @@ async function ensureDatabase(): Promise<void> {
 export async function readDatabase(): Promise<Database> {
   await ensureDatabase();
   const content = await fs.readFile(dataFile, "utf8");
-  return JSON.parse(content) as Database;
+  const database = JSON.parse(content) as Database;
+  return {
+    ...database,
+    users: database.users.map((user) => ({ ...user, ageGroup: "16+" })),
+    activities: database.activities.map((activity) => ({ ...activity, ageGroup: "16+" })),
+  };
 }
 
 export async function writeDatabase(database: Database): Promise<void> {

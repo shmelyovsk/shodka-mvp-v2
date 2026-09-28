@@ -102,7 +102,7 @@ app.post("/api/activities", async (req, res, next) => {
       price: Math.max(0, Number(req.body.price ?? 0)),
       equipment: String(req.body.equipment ?? "Не требуется"),
       description: String(req.body.description ?? ""),
-      ageGroup: String(req.body.ageGroup ?? "16+"),
+      ageGroup: "16+",
       organizerId,
       status: "open",
       createdAt: new Date().toISOString(),
