@@ -4,6 +4,7 @@ export type ApplicationStatus = "pending" | "approved" | "rejected";
 export interface User {
   id: string;
   name: string;
+  age: number;
   ageGroup: "16+";
   avatarUrl?: string;
   rating?: number;
@@ -26,6 +27,8 @@ export interface Activity {
   equipment: string;
   description: string;
   ageGroup: string;
+  minAge?: number;
+  maxAge?: number;
   organizerId: string;
   status: "open" | "full" | "cancelled";
   createdAt: string;

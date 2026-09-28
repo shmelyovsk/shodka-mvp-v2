@@ -14,15 +14,24 @@ export interface Activity {
   equipment: string;
   description: string;
   ageGroup: string;
+  minAge?: number;
+  maxAge?: number;
   organizerId: string;
   organizer?: {
     id: string;
     name: string;
+    age: number;
     ageGroup: string;
     avatarUrl?: string;
     rating?: number;
     reviewsCount?: number;
   };
+  participants?: Array<{
+    id: string;
+    name: string;
+    age: number;
+    avatarUrl?: string;
+  }>;
   status: "open" | "full" | "cancelled";
   relation?: "organizer" | "participant";
   applicationStatus?: "pending" | "approved" | "rejected";
@@ -38,6 +47,7 @@ export interface OrganizerApplication {
   user?: {
     id: string;
     name: string;
+    age: number;
     ageGroup: string;
     avatarUrl?: string;
     rating?: number;

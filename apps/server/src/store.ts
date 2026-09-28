@@ -12,6 +12,14 @@ const dataFile = configuredPath
 const seedFile = path.resolve(projectRoot, "data/seed.json");
 
 let writeQueue: Promise<void> = Promise.resolve();
+const demoAges: Record<string, number> = { "user-1": 18, "user-2": 25, "user-3": 16 };
+
+function activityAgeGroup(minAge?: number, maxAge?: number): string {
+  if (minAge !== undefined && maxAge !== undefined) return `${minAge}–${maxAge}`;
+  if (minAge !== undefined) return `${minAge}+`;
+  if (maxAge !== undefined) return `16–${maxAge}`;
+  return "16+";
+}
 
 async function ensureDatabase(): Promise<void> {
   try {
@@ -28,8 +36,15 @@ export async function readDatabase(): Promise<Database> {
   const database = JSON.parse(content) as Database;
   return {
     ...database,
-    users: database.users.map((user) => ({ ...user, ageGroup: "16+" })),
-    activities: database.activities.map((activity) => ({ ...activity, ageGroup: "16+" })),
+    users: database.users.map((user) => ({
+      ...user,
+      age: user.age ?? demoAges[user.id] ?? 16,
+      ageGroup: "16+",
+    })),
+    activities: database.activities.map((activity) => ({
+      ...activity,
+      ageGroup: activityAgeGroup(activity.minAge, activity.maxAge),
+    })),
   };
 }
 

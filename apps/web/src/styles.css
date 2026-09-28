@@ -55,6 +55,14 @@ main { padding: 0 16px; }
 .organizer-inline { display: flex; align-items: center; gap: 9px; margin-top: 13px; color: #69766d; font-size: 12px; }
 .organizer-inline > span { display: grid; gap: 2px; }
 .organizer-inline strong { color: #253229; }
+.participants-block { display: grid; gap: 7px; margin-top: 13px; }
+.participants-label { color: #69766d; font-size: 12px; font-weight: 700; }
+.participant-list { display: flex; flex-wrap: wrap; gap: 7px; }
+.participant-chip { display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px 5px; border-radius: 999px; background: #f3f6ef; }
+.participant-chip > span { display: grid; line-height: 1.05; }
+.participant-chip strong { max-width: 74px; overflow: hidden; color: #253229; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.participant-chip small { margin-top: 3px; color: #69766d; font-size: 10px; }
+.participant-more { display: grid; min-width: 42px; place-items: center; border-radius: 999px; background: #edf7d0; color: #354618; font-size: 12px; font-weight: 800; }
 .rating-badge { display: inline-flex; width: fit-content; color: #756000; font-size: 11px; font-weight: 750; }
 .rating-badge.new-user { color: #69766d; }
 .card-footer { margin-top: 16px; padding-top: 13px; border-top: 1px solid #edf0ed; font-size: 13px; }
@@ -87,6 +95,7 @@ main { padding: 0 16px; }
 .form input, .form select, .form textarea { width: 100%; border: 1px solid #dce2dc; border-radius: 13px; padding: 13px; background: white; color: #17251d; outline: none; }
 .form input:focus, .form select:focus, .form textarea:focus { border-color: #91ae36; box-shadow: 0 0 0 3px rgba(217,255,90,.35); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-hint { margin: -7px 2px 0; color: #69766d; font-size: 12px; line-height: 1.4; }
 
 nav { position: fixed; z-index: 10; left: 50%; bottom: 0; transform: translateX(-50%); width: min(100%, 560px); display: grid; grid-template-columns: repeat(4,1fr); padding: 10px 8px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #e1e6e1; background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
 nav button { display: grid; gap: 3px; place-items: center; border: 0; background: transparent; color: #7a857d; font-size: 11px; font-weight: 650; }

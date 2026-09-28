@@ -16,6 +16,28 @@ function userIdFromRequest(req: express.Request): string {
   return String(req.header("x-user-id") ?? "user-1");
 }
 
+function participantsForActivity(db: Awaited<ReturnType<typeof readDatabase>>, activity: Activity) {
+  const approvedUserIds = db.applications
+    .filter((item) => item.activityId === activity.id && item.status === "approved")
+    .map((item) => item.userId);
+  const participantIds = new Set([activity.organizerId, ...approvedUserIds]);
+  return db.users
+    .filter((user) => participantIds.has(user.id))
+    .map(({ id, name, age, avatarUrl }) => ({ id, name, age, avatarUrl }));
+}
+
+function optionalAge(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  return Number(value);
+}
+
+function ageLimitLabel(minAge?: number, maxAge?: number): string {
+  if (minAge !== undefined && maxAge !== undefined) return `${minAge}–${maxAge}`;
+  if (minAge !== undefined) return `${minAge}+`;
+  if (maxAge !== undefined) return `16–${maxAge}`;
+  return "16+";
+}
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "shodka-api" });
 });
@@ -41,10 +63,14 @@ app.get("/api/activities", async (req, res, next) => {
       .filter((item) => !district || item.district.toLowerCase().includes(district))
       .filter((item) => !level || item.level === level)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .map(({ exactAddress: _hidden, ...item }) => ({
-        ...item,
-        organizer: db.users.find((user) => user.id === item.organizerId),
-      }));
+      .map((activity) => {
+        const { exactAddress: _hidden, ...item } = activity;
+        return {
+          ...item,
+          organizer: db.users.find((user) => user.id === activity.organizerId),
+          participants: participantsForActivity(db, activity),
+        };
+      });
     res.json(activities);
   } catch (error) {
     next(error);
@@ -67,6 +93,7 @@ app.get("/api/activities/:id", async (req, res, next) => {
     res.json({
       ...visibleActivity,
       organizer: db.users.find((user) => user.id === activity.organizerId),
+      participants: participantsForActivity(db, activity),
     });
   } catch (error) {
     next(error);
@@ -86,6 +113,27 @@ app.post("/api/activities", async (req, res, next) => {
     if (activityDate.getTime() <= Date.now()) {
       return res.status(400).json({ message: "Нельзя создать сходку на прошедшую дату" });
     }
+    const minAge = optionalAge(req.body.minAge);
+    const maxAge = optionalAge(req.body.maxAge);
+    if (minAge !== undefined && (!Number.isInteger(minAge) || minAge < 16 || minAge > 100)) {
+      return res.status(400).json({ message: "Минимальный возраст должен быть от 16 до 100 лет" });
+    }
+    if (maxAge !== undefined && (!Number.isInteger(maxAge) || maxAge < 16 || maxAge > 100)) {
+      return res.status(400).json({ message: "Максимальный возраст должен быть от 16 до 100 лет" });
+    }
+    if (minAge !== undefined && maxAge !== undefined && minAge > maxAge) {
+      return res.status(400).json({ message: "Минимальный возраст не может быть больше максимального" });
+    }
+
+    const db = await readDatabase();
+    const organizer = db.users.find((item) => item.id === organizerId);
+    if (!organizer) return res.status(404).json({ message: "Профиль организатора не найден" });
+    if (minAge !== undefined && organizer.age < minAge) {
+      return res.status(400).json({ message: `Ваш возраст меньше установленного минимума ${minAge} лет` });
+    }
+    if (maxAge !== undefined && organizer.age > maxAge) {
+      return res.status(400).json({ message: `Ваш возраст больше установленного максимума ${maxAge} лет` });
+    }
 
     const activity: Activity = {
       id: nanoid(),
@@ -102,12 +150,13 @@ app.post("/api/activities", async (req, res, next) => {
       price: Math.max(0, Number(req.body.price ?? 0)),
       equipment: String(req.body.equipment ?? "Не требуется"),
       description: String(req.body.description ?? ""),
-      ageGroup: "16+",
+      ageGroup: ageLimitLabel(minAge, maxAge),
+      minAge,
+      maxAge,
       organizerId,
       status: "open",
       createdAt: new Date().toISOString(),
     };
-    const db = await readDatabase();
     db.activities.push(activity);
     await writeDatabase(db);
     res.status(201).json(activity);
@@ -124,6 +173,14 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     if (!activity) return res.status(404).json({ message: "Активность не найдена" });
     if (activity.status !== "open") return res.status(409).json({ message: "Набор уже закрыт" });
     if (activity.organizerId === userId) return res.status(409).json({ message: "Организатор уже участвует" });
+    const user = db.users.find((item) => item.id === userId);
+    if (!user) return res.status(404).json({ message: "Профиль пользователя не найден" });
+    if (activity.minAge !== undefined && user.age < activity.minAge) {
+      return res.status(409).json({ message: `Для этой сходки установлен возраст от ${activity.minAge} лет` });
+    }
+    if (activity.maxAge !== undefined && user.age > activity.maxAge) {
+      return res.status(409).json({ message: `Для этой сходки установлен возраст до ${activity.maxAge} лет` });
+    }
     const existing = db.applications.find((item) => item.activityId === activity.id && item.userId === userId);
     if (existing) return res.status(409).json({ message: "Заявка уже отправлена" });
 
@@ -160,6 +217,7 @@ app.get("/api/users/:userId/activities", async (req, res, next) => {
         return {
           ...(maySeeAddress ? activity : publicActivity),
           organizer: db.users.find((user) => user.id === activity.organizerId),
+          participants: participantsForActivity(db, activity),
           relation: isOrganizer ? "organizer" : "participant",
           applicationStatus,
         };

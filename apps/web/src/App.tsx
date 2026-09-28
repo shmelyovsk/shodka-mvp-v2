@@ -81,6 +81,27 @@ function RatingBadge({ rating, reviewsCount }: { rating?: number; reviewsCount?:
   return <span className="rating-badge">★ {rating.toFixed(1)} · {reviewsCount ?? 0} отзывов</span>;
 }
 
+function ParticipantList({ participants }: { participants?: Activity["participants"] }) {
+  if (!participants?.length) return null;
+  const visibleParticipants = participants.slice(0, 4);
+  return (
+    <div className="participants-block">
+      <span className="participants-label">Участники</span>
+      <div className="participant-list">
+        {visibleParticipants.map((participant) => (
+          <span className="participant-chip" key={participant.id} title={`${participant.name}, ${participant.age} лет`}>
+            <PersonAvatar name={participant.name} avatarUrl={participant.avatarUrl} />
+            <span><strong>{participant.name}</strong><small>{participant.age} лет</small></span>
+          </span>
+        ))}
+        {participants.length > visibleParticipants.length && (
+          <span className="participant-more">+{participants.length - visibleParticipants.length}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => void }) {
   const free = activity.capacity - activity.approvedCount;
   return (
@@ -98,8 +119,9 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
           <span>Организатор <strong>{activity.organizer.name}</strong><RatingBadge rating={activity.organizer.rating} reviewsCount={activity.organizer.reviewsCount} /></span>
         </div>
       )}
+      <ParticipantList participants={activity.participants} />
       <div className="card-footer">
-        <span>{levelNames[activity.level]}</span>
+        <span>{levelNames[activity.level]} · {activity.ageGroup}</span>
         <strong>{activity.price ? `${activity.price} ₽ с человека` : "Бесплатно"}</strong>
       </div>
       {activity.relation && (
@@ -312,6 +334,8 @@ function App() {
               <label>Публичное место<input required name="publicPlace" placeholder="Спортивный центр рядом с метро" /></label>
               <label>Точный адрес<input name="exactAddress" placeholder="Увидят только подтверждённые участники" /></label>
               <div className="form-row"><label>Уровень<select name="level" defaultValue="any"><option value="beginner">Начинающий</option><option value="any">Любой</option><option value="intermediate">Средний</option></select></label><label>С человека, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
+              <div className="form-row"><label>Возраст от<input type="number" min="16" max="100" name="minAge" placeholder="Необязательно" /></label><label>Возраст до<input type="number" min="16" max="100" name="maxAge" placeholder="Необязательно" /></label></div>
+              <p className="form-hint">Если поля пустые, присоединиться сможет любой пользователь 16+.</p>
               <label>Инвентарь<input name="equipment" placeholder="Мяч уже есть" /></label>
               <label>Описание<textarea name="description" rows={3} placeholder="Расскажите о формате встречи" /></label>
               <button className="primary full" type="submit">Опубликовать</button>
@@ -352,7 +376,7 @@ function App() {
                     <div><h3>{application.user?.name ?? "Участник"}</h3><RatingBadge rating={application.user?.rating} reviewsCount={application.user?.reviewsCount} /></div>
                   </div>
                   <p className="meta">Хочет присоединиться к «{application.activity?.title ?? "сходке"}»</p>
-                  <p className="meta">Возрастная группа: {application.user?.ageGroup ?? "не указана"}</p>
+                  <p className="meta">Возраст: {application.user?.age !== undefined ? `${application.user.age} лет` : "не указан"}</p>
                   {application.status === "pending" ? (
                     <div className="request-actions">
                       <button className="secondary danger" onClick={() => void updateApplication(application.id, "rejected")}>Отклонить</button>
@@ -391,6 +415,7 @@ function App() {
                 <div><span>Организатор</span><strong>{selected.organizer.name}</strong><RatingBadge rating={selected.organizer.rating} reviewsCount={selected.organizer.reviewsCount} /></div>
               </div>
             )}
+            <ParticipantList participants={selected.participants} />
             <dl>
               <div><dt>Когда</dt><dd>{formatDate(selected.date)}, {selected.durationMinutes} мин</dd></div>
               <div><dt>Где</dt><dd>{selected.publicPlace}, {selected.district}</dd></div>
