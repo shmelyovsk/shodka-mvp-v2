@@ -291,9 +291,8 @@ function App() {
         {tab === "catalog" && (
           <>
             <section className="hero">
-              <p>Двигаться проще вместе</p>
-              <h2>Найди компанию для спорта рядом</h2>
-              <button className="primary" onClick={() => setTab("create")}>Создать сходку</button>
+              <img src="/shodka-court.webp" alt="Спортивная площадка «Сходка»" />
+              <button className="primary hero-action" onClick={() => setTab("create")}>Создать сходку</button>
             </section>
             <div className="filter-group">
               <span className="filter-label">Когда</span>

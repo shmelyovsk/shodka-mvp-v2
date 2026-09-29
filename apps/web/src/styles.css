@@ -21,10 +21,9 @@ header h1 { margin: 2px 0 0; font-size: 28px; letter-spacing: -.8px; }
 .demo-switcher button.active { background: #17251d; color: white; }
 main { padding: 0 16px; }
 
-.hero { overflow: hidden; position: relative; padding: 28px 24px; border-radius: 28px; background: #d9ff5a; min-height: 210px; }
-.hero::after { content: ""; position: absolute; width: 150px; height: 150px; border: 26px solid rgba(23,37,29,.09); border-radius: 50%; right: -45px; bottom: -65px; }
-.hero p { margin: 0 0 8px; font-weight: 700; font-size: 14px; }
-.hero h2 { position: relative; z-index: 1; max-width: 320px; margin: 0 0 24px; font-size: 31px; line-height: 1.03; letter-spacing: -1.2px; }
+.hero { display: grid; gap: 10px; }
+.hero img { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: 28px; object-fit: cover; }
+.hero-action { width: 100%; }
 .primary { position: relative; z-index: 1; border: 0; padding: 13px 18px; border-radius: 14px; color: white; background: #17251d; font-weight: 750; }
 .primary:disabled { opacity: .45; cursor: default; }
 .full { width: 100%; }
