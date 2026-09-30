@@ -9,6 +9,7 @@ services:
       DATA_FILE: /app/data/db.json
       MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
       MAX_BOT_API_URL: ${MAX_BOT_API_URL:-}
+      MAX_BOT_POLLING_ENABLED: ${MAX_BOT_POLLING_ENABLED:-true}
       MINI_APP_URL: ${MINI_APP_URL:-http://localhost:8080}
     volumes:
       - shodka_data:/app/data

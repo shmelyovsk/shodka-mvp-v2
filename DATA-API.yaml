@@ -1,0 +1,245 @@
+version: "1.0"
+solution:
+  name: Сходка
+  team: МАЕВСКИЕ ЧИПы
+
+api:
+  base_url: https://shodka-mvp-v2.onrender.com
+  openapi: ./openapi.yaml
+  content_type: application/json
+
+test_accounts:
+  participant:
+    role: Участник
+    user_id: user-1
+    name: Ира
+    age: 18
+  organizer:
+    role: Организатор
+    user_id: user-2
+    name: Саша
+    age: 25
+
+runtime_variables:
+  future_datetime:
+    description: ISO 8601 дата и время не раньше чем через семь дней от момента проверки
+    example: "2026-10-07T18:00:00+03:00"
+  created_activity_id:
+    description: Значение id из ответа проверки create_activity
+  created_application_id:
+    description: Значение id из ответа проверки create_application
+
+checks:
+  - id: health
+    required: true
+    description: API доступен по HTTPS.
+    role: anonymous
+    method: GET
+    path: /health
+    request:
+      headers: {}
+      query: {}
+      body: null
+    expected:
+      status_codes: [200]
+      content_type: application/json
+      required_fields: [status, service]
+      field_values:
+        status: ok
+        service: shodka-api
+
+  - id: list_activities
+    required: true
+    description: Каталог возвращает только будущие неотменённые сходки.
+    role: participant
+    method: GET
+    path: /api/activities
+    request:
+      headers: {}
+      query:
+        sport: ""
+        district: ""
+      body: null
+    expected:
+      status_codes: [200]
+      content_type: application/json
+      format: array
+      required_item_fields:
+        - id
+        - title
+        - sport
+        - date
+        - district
+        - publicPlace
+        - capacity
+        - approvedCount
+        - price
+        - ageGroup
+        - organizer
+        - participants
+      forbidden_item_fields: [exactAddress]
+
+  - id: create_activity
+    required: true
+    description: Организатор создаёт сходку с будущей датой.
+    role: organizer
+    method: POST
+    path: /api/activities
+    request:
+      headers:
+        x-user-id: user-2
+        content-type: application/json
+      query: {}
+      body:
+        title: API-проверка Сходки
+        sport: Бег
+        date: ${future_datetime}
+        durationMinutes: 45
+        district: Раменки
+        publicPlace: Парк 50-летия Октября
+        exactAddress: Главный вход в парк
+        level: any
+        capacity: 5
+        price: 0
+        equipment: Спортивная обувь
+        description: Тестовая сходка для проверки API
+        minAge: 16
+        maxAge: 30
+    expected:
+      status_codes: [201]
+      content_type: application/json
+      required_fields:
+        - id
+        - title
+        - date
+        - organizerId
+        - status
+        - createdAt
+      field_values:
+        organizerId: user-2
+        status: open
+      save:
+        created_activity_id: $.id
+
+  - id: create_application
+    required: true
+    depends_on: [create_activity]
+    description: Участник подаёт заявку на созданную сходку.
+    role: participant
+    method: POST
+    path: /api/activities/${created_activity_id}/applications
+    request:
+      headers:
+        x-user-id: user-1
+        content-type: application/json
+      query: {}
+      body: null
+    expected:
+      status_codes: [201]
+      content_type: application/json
+      required_fields: [id, activityId, userId, status, createdAt]
+      field_values:
+        activityId: ${created_activity_id}
+        userId: user-1
+        status: pending
+      save:
+        created_application_id: $.id
+
+  - id: organizer_applications
+    required: true
+    depends_on: [create_application]
+    description: Организатор видит новую заявку.
+    role: organizer
+    method: GET
+    path: /api/organizers/user-2/applications
+    request:
+      headers: {}
+      query: {}
+      body: null
+    expected:
+      status_codes: [200]
+      content_type: application/json
+      format: array
+      contains:
+        id: ${created_application_id}
+        activityId: ${created_activity_id}
+        userId: user-1
+      required_item_fields: [id, activityId, userId, status, activity, user]
+
+  - id: approve_application
+    required: true
+    depends_on: [create_application]
+    description: Организатор подтверждает заявку.
+    role: organizer
+    method: PATCH
+    path: /api/applications/${created_application_id}
+    request:
+      headers:
+        x-user-id: user-2
+        content-type: application/json
+      query: {}
+      body:
+        status: approved
+    expected:
+      status_codes: [200]
+      content_type: application/json
+      required_fields: [id, activityId, userId, status, createdAt]
+      field_values:
+        id: ${created_application_id}
+        status: approved
+
+  - id: approved_participant_sees_address
+    required: true
+    depends_on: [approve_application]
+    description: После подтверждения участник получает точный адрес.
+    role: participant
+    method: GET
+    path: /api/activities/${created_activity_id}
+    request:
+      headers:
+        x-user-id: user-1
+      query: {}
+      body: null
+    expected:
+      status_codes: [200]
+      content_type: application/json
+      required_fields: [id, exactAddress, organizer, participants]
+      field_values:
+        id: ${created_activity_id}
+        exactAddress: Главный вход в парк
+
+  - id: cancel_activity
+    required: true
+    depends_on: [approve_application]
+    description: Организатор отменяет тестовую сходку.
+    role: organizer
+    method: POST
+    path: /api/activities/${created_activity_id}/cancel
+    request:
+      headers:
+        x-user-id: user-2
+        content-type: application/json
+      query: {}
+      body: null
+    expected:
+      status_codes: [200]
+      content_type: application/json
+      required_fields: [id, status]
+      field_values:
+        id: ${created_activity_id}
+        status: cancelled
+
+  - id: max_connection
+    required: false
+    description: Дополнительная проверка связи backend с MAX API.
+    role: anonymous
+    method: GET
+    path: /api/max/status
+    request:
+      headers: {}
+      query: {}
+      body: null
+    expected:
+      status_codes: [200]
+      content_type: application/json
+      required_fields: [configured, connected, message]

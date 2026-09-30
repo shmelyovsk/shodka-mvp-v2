@@ -1,0 +1,544 @@
+openapi: 3.0.3
+info:
+  title: Сходка API
+  version: 0.1.0
+  description: |
+    REST API MVP сервиса «Сходка». В демонстрационной версии пользователь
+    определяется заголовком x-user-id. По умолчанию используется user-1.
+servers:
+  - url: https://shodka-mvp-v2.onrender.com
+    description: Рабочий стенд
+  - url: http://localhost:3000
+    description: Локальный запуск
+tags:
+  - name: System
+  - name: Activities
+  - name: Applications
+  - name: Users
+  - name: Organizers
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Проверить работу API
+      operationId: getHealth
+      responses:
+        "200":
+          description: API работает
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /api/max/status:
+    get:
+      tags: [System]
+      summary: Проверить подключение к MAX API
+      operationId: getMaxStatus
+      responses:
+        "200":
+          description: Состояние подключения
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaxStatus"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/activities:
+    get:
+      tags: [Activities]
+      summary: Получить будущие активные сходки
+      operationId: listActivities
+      parameters:
+        - in: query
+          name: sport
+          schema:
+            type: string
+          description: Точное название вида спорта без учёта регистра
+        - in: query
+          name: district
+          schema:
+            type: string
+          description: Часть названия района без учёта регистра
+        - in: query
+          name: level
+          schema:
+            $ref: "#/components/schemas/SkillLevel"
+      responses:
+        "200":
+          description: Список сходок без точных адресов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityWithPeople"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Activities]
+      summary: Создать сходку
+      operationId: createActivity
+      security:
+        - DemoUserId: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActivityRequest"
+      responses:
+        "201":
+          description: Сходка создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activity"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/activities/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ActivityId"
+    get:
+      tags: [Activities]
+      summary: Получить одну сходку
+      description: Точный адрес виден только организатору или одобренному участнику.
+      operationId: getActivity
+      security:
+        - DemoUserId: []
+      responses:
+        "200":
+          description: Карточка сходки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityWithPeople"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/activities/{id}/applications:
+    parameters:
+      - $ref: "#/components/parameters/ActivityId"
+    post:
+      tags: [Applications]
+      summary: Подать заявку на сходку
+      operationId: createApplication
+      security:
+        - DemoUserId: []
+      responses:
+        "201":
+          description: Заявка создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/activities/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/ActivityId"
+    post:
+      tags: [Activities]
+      summary: Отменить сходку
+      operationId: cancelActivity
+      security:
+        - DemoUserId: []
+      responses:
+        "200":
+          description: Сходка отменена
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activity"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/users/{userId}/activities:
+    get:
+      tags: [Users]
+      summary: Получить сходки пользователя
+      operationId: listUserActivities
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Организованные сходки и сходки с заявками пользователя
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/ActivityWithPeople"
+                    - type: object
+                      required: [relation]
+                      properties:
+                        relation:
+                          type: string
+                          enum: [organizer, participant]
+                        applicationStatus:
+                          $ref: "#/components/schemas/ApplicationStatus"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/organizers/{userId}/applications:
+    get:
+      tags: [Organizers]
+      summary: Получить заявки на сходки организатора
+      operationId: listOrganizerApplications
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Заявки с данными сходки и пользователя
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrganizerApplication"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/applications/{id}:
+    patch:
+      tags: [Applications]
+      summary: Одобрить или отклонить заявку
+      operationId: updateApplication
+      security:
+        - DemoUserId: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Идентификатор заявки
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [approved, rejected]
+      responses:
+        "200":
+          description: Статус заявки изменён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    DemoUserId:
+      type: apiKey
+      in: header
+      name: x-user-id
+      description: Демонстрационный ID пользователя; если заголовок отсутствует, API использует user-1.
+  parameters:
+    ActivityId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+      description: Идентификатор сходки
+    UserId:
+      in: path
+      name: userId
+      required: true
+      schema:
+        type: string
+      description: Идентификатор пользователя
+  responses:
+    BadRequest:
+      description: Некорректные входные данные
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Сущность не найдена
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Действие конфликтует с текущим состоянием
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Health:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: shodka-api
+    MaxStatus:
+      type: object
+      required: [configured, connected, message]
+      properties:
+        configured:
+          type: boolean
+        connected:
+          type: boolean
+        bot:
+          type: object
+          required: [user_id, first_name]
+          properties:
+            user_id:
+              type: integer
+              format: int64
+            first_name:
+              type: string
+            username:
+              type: string
+              nullable: true
+        message:
+          type: string
+    SkillLevel:
+      type: string
+      enum: [beginner, any, intermediate]
+    ApplicationStatus:
+      type: string
+      enum: [pending, approved, rejected]
+      nullable: true
+    User:
+      type: object
+      required: [id, name, age, ageGroup]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+          minimum: 16
+        ageGroup:
+          type: string
+          example: 16+
+        avatarUrl:
+          type: string
+        rating:
+          type: number
+          format: float
+        reviewsCount:
+          type: integer
+          minimum: 0
+    Participant:
+      type: object
+      required: [id, name, age]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+          minimum: 16
+        avatarUrl:
+          type: string
+    Activity:
+      type: object
+      required:
+        - id
+        - title
+        - sport
+        - date
+        - durationMinutes
+        - district
+        - publicPlace
+        - level
+        - capacity
+        - approvedCount
+        - price
+        - equipment
+        - description
+        - ageGroup
+        - organizerId
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        sport:
+          type: string
+        date:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+          minimum: 1
+        district:
+          type: string
+        publicPlace:
+          type: string
+        exactAddress:
+          type: string
+          description: Отсутствует в публичном ответе до подтверждения заявки.
+        level:
+          $ref: "#/components/schemas/SkillLevel"
+        capacity:
+          type: integer
+          minimum: 2
+        approvedCount:
+          type: integer
+          minimum: 1
+        price:
+          type: number
+          minimum: 0
+          description: Цена за одного человека в рублях.
+        equipment:
+          type: string
+        description:
+          type: string
+        ageGroup:
+          type: string
+        minAge:
+          type: integer
+          minimum: 16
+          maximum: 100
+        maxAge:
+          type: integer
+          minimum: 16
+          maximum: 100
+        organizerId:
+          type: string
+        status:
+          type: string
+          enum: [open, full, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+    ActivityWithPeople:
+      allOf:
+        - $ref: "#/components/schemas/Activity"
+        - type: object
+          properties:
+            organizer:
+              $ref: "#/components/schemas/User"
+            participants:
+              type: array
+              items:
+                $ref: "#/components/schemas/Participant"
+    CreateActivityRequest:
+      type: object
+      required: [title, sport, date, district, publicPlace, level, capacity]
+      properties:
+        title:
+          type: string
+          example: Вечерняя пробежка
+        sport:
+          type: string
+          example: Бег
+        date:
+          type: string
+          format: date-time
+          description: Будущие дата и время в ISO 8601.
+        durationMinutes:
+          type: integer
+          minimum: 1
+          default: 60
+        district:
+          type: string
+          example: Раменки
+        publicPlace:
+          type: string
+          example: Парк 50-летия Октября
+        exactAddress:
+          type: string
+          example: Главный вход со стороны метро
+        level:
+          $ref: "#/components/schemas/SkillLevel"
+        capacity:
+          type: integer
+          minimum: 2
+        price:
+          type: number
+          minimum: 0
+          default: 0
+        equipment:
+          type: string
+        description:
+          type: string
+        minAge:
+          type: integer
+          minimum: 16
+          maximum: 100
+        maxAge:
+          type: integer
+          minimum: 16
+          maximum: 100
+    Application:
+      type: object
+      required: [id, activityId, userId, status, createdAt]
+      properties:
+        id:
+          type: string
+        activityId:
+          type: string
+        userId:
+          type: string
+        status:
+          $ref: "#/components/schemas/ApplicationStatus"
+        createdAt:
+          type: string
+          format: date-time
+    OrganizerApplication:
+      allOf:
+        - $ref: "#/components/schemas/Application"
+        - type: object
+          properties:
+            activity:
+              $ref: "#/components/schemas/Activity"
+            user:
+              $ref: "#/components/schemas/User"
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
