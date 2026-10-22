@@ -1,3 +1,6 @@
+import "./config.js";
+import pg from "pg";
+import { createPostgresStore } from "./postgres.js";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +13,22 @@ const dataFile = configuredPath
   ? path.resolve(projectRoot, configuredPath)
   : path.resolve(projectRoot, "data/db.json");
 const seedFile = path.resolve(projectRoot, "data/seed.json");
+
+const connectionString = process.env.DATABASE_URL?.trim();
+const pool = connectionString ? new pg.Pool({ connectionString, max: 3,
+  connectionTimeoutMillis: 10000, idleTimeoutMillis: 30000, query_timeout: 15000 }) : undefined;
+pool?.on("error", () => console.error("PostgreSQL: idle connection error"));
+const postgres = pool ? createPostgresStore(pool) : undefined;
+export const storageKind = postgres ? "postgres" : "json";
+export async function closeDatabase() { await pool?.end(); }
+export async function checkDatabase() {
+  if (pool) await pool.query("SELECT 1");
+  else await readDatabase();
+}
+export async function importDatabase(database: Database) {
+  if (!postgres) throw new Error("DATABASE_URL must be set for import");
+  await postgres.importIntoEmpty(database);
+}
 
 let writeQueue: Promise<void> = Promise.resolve();
 const demoAges: Record<string, number> = { "user-1": 18, "user-2": 25, "user-3": 16 };
@@ -31,6 +50,7 @@ async function ensureDatabase(): Promise<void> {
 }
 
 export async function readDatabase(): Promise<Database> {
+  if (postgres) return postgres.read();
   await ensureDatabase();
   const content = await fs.readFile(dataFile, "utf8");
   const database = JSON.parse(content) as Database;
@@ -49,6 +69,7 @@ export async function readDatabase(): Promise<Database> {
 }
 
 export async function writeDatabase(database: Database): Promise<void> {
+  if (postgres) return postgres.write(database);
   writeQueue = writeQueue.catch(() => {}).then(async () => {
     await fs.mkdir(path.dirname(dataFile), { recursive: true });
     const temporary = `${dataFile}.tmp`;

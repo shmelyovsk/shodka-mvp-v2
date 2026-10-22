@@ -2,11 +2,12 @@ import "./config.js";
 import cors from "cors";
 import express from "express";
 import { nanoid } from "nanoid";
-import { readDatabase, writeDatabase } from "./store.js";
+import { readDatabase, writeDatabase, closeDatabase, checkDatabase, storageKind } from "./store.js";
 import { getMaxConnectionStatus, startMaxBot } from "./max.js";
 import { requestIdentity, demoEnabled } from "./auth.js";
 import { sendNotification } from "./notifications.js";
 import { startTelegramBot, getTelegramConnectionStatus } from "./telegram.js";
+import { StorageConflict } from "./postgres.js";
 import type { Activity, SkillLevel } from "./types.js";
 
 const app = express();
@@ -15,14 +16,16 @@ const port = Number(process.env.PORT ?? 3000);
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json());
 const resolvedUsers = new WeakMap<express.Request, string>();
-// Serialize complete API operations while the MVP uses one JSON file.
+// Serialize API operations in this process; PostgreSQL versions also protect across processes.
 let operations = Promise.resolve();
 app.use("/api", (req, res, next) => {
   const previous = operations;
   operations = new Promise<void>(release => { res.once("finish", release); });
   void previous.then(async () => {
     try {
-      const identity = requestIdentity(req);
+      let identity: ReturnType<typeof requestIdentity>;
+      try { identity = requestIdentity(req); }
+      catch { return void res.status(401).json({ message: "Не удалось проверить вход. Откройте приложение заново через бота" }); }
       let userId = identity?.id;
       if (!identity && demoEnabled()) {
         const demoId = req.header("x-user-id") ?? "user-1";
@@ -45,9 +48,7 @@ app.use("/api", (req, res, next) => {
         if (!user || user.age < 16) return void res.status(403).json({ message: "Сначала укажите возраст в профиле (16+)" });
       }
       next();
-    } catch {
-      res.status(401).json({ message: "Не удалось проверить вход. Откройте приложение заново через бота" });
-    }
+    } catch (error) { next(error); }
   });
 });
 
@@ -98,8 +99,9 @@ function ageLimitLabel(minAge?: number, maxAge?: number): string {
   return "16+";
 }
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "shodka-api" });
+app.get("/health", async (_req, res) => {
+  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", storage: storageKind }); }
+  catch { res.status(503).json({ status: "unavailable", service: "shodka-api", storage: storageKind }); }
 });
 
 app.get("/api/max/status", async (_req, res, next) => {
@@ -356,10 +358,14 @@ app.post("/api/activities/:id/cancel", async (req, res, next) => {
 });
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(error);
+  if (error instanceof StorageConflict) return void res.status(409).json({ message: error.message });
+  console.error("API operation failed");
   res.status(500).json({ message: "Внутренняя ошибка сервера" });
 });
 
+try { await readDatabase(); }
+catch { console.error("Storage initialization failed. Check DATABASE_URL and database access"); await closeDatabase(); process.exit(1); }
+console.log(`Storage: ${storageKind}`);
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`Shodka API listening on ${port}`);
 });
@@ -370,7 +376,7 @@ const stopTelegramBot = startTelegramBot();
 function shutdown() {
   stopMaxBot?.();
   stopTelegramBot?.();
-  server.close(() => process.exit(0));
+  server.close(() => { void closeDatabase().finally(() => process.exit(0)); });
 }
 
 process.once("SIGINT", shutdown);
