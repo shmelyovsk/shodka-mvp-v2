@@ -10,12 +10,14 @@
     "build": "npm run build --workspace @shodka/server && npm run build --workspace @shodka/web",
     "start": "npm run start --workspace @shodka/server",
     "typecheck": "npm run typecheck --workspace @shodka/server && npm run typecheck --workspace @shodka/web",
-    "test": "npm run build && node tests/integration.mjs"
+    "test": "npm run build && node tests/integration.mjs",
+    "test:postgres": "npm run build --workspace @shodka/server && node tests/postgres.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "@electric-sql/pglite": "^0.3.14"
   }
 }
