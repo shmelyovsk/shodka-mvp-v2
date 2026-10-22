@@ -38,6 +38,7 @@ export async function getMaxConnectionStatus(): Promise<{
   try {
     const response = await fetch(`${apiUrl}/me`, {
       headers: { Authorization: token },
+      signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) {
       return {
@@ -76,6 +77,7 @@ export async function sendMaxNotification(notification: Notification): Promise<v
   try {
     const response = await fetch(`${apiUrl}/messages?user_id=${encodeURIComponent(notification.userId)}`, {
       method: "POST",
+      signal: AbortSignal.timeout(10000),
       headers: {
         Authorization: token,
         "content-type": "application/json",
@@ -108,7 +110,7 @@ function welcomeExtra() {
   return {
     attachments: [
       Keyboard.inlineKeyboard([
-        [Keyboard.button.link("Открыть Сходку", miniAppUrl)],
+        [Keyboard.button.openApp("Открыть Сходку", process.env.MAX_BOT_USERNAME?.trim() || "t221_hakaton_max_bot")],
       ]),
     ],
   };
