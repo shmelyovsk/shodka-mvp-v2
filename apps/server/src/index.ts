@@ -3,7 +3,10 @@ import cors from "cors";
 import express from "express";
 import { nanoid } from "nanoid";
 import { readDatabase, writeDatabase } from "./store.js";
-import { getMaxConnectionStatus, sendMaxNotification, startMaxBot } from "./max.js";
+import { getMaxConnectionStatus, startMaxBot } from "./max.js";
+import { requestIdentity, demoEnabled } from "./auth.js";
+import { sendNotification } from "./notifications.js";
+import { startTelegramBot, getTelegramConnectionStatus } from "./telegram.js";
 import type { Activity, SkillLevel } from "./types.js";
 
 const app = express();
@@ -11,9 +14,66 @@ const port = Number(process.env.PORT ?? 3000);
 
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json());
+const resolvedUsers = new WeakMap<express.Request, string>();
+// Serialize complete API operations while the MVP uses one JSON file.
+let operations = Promise.resolve();
+app.use("/api", (req, res, next) => {
+  const previous = operations;
+  operations = new Promise<void>(release => { res.once("finish", release); });
+  void previous.then(async () => {
+    try {
+      const identity = requestIdentity(req);
+      let userId = identity?.id;
+      if (!identity && demoEnabled()) {
+        const demoId = req.header("x-user-id") ?? "user-1";
+        if (["user-1", "user-2", "user-3"].includes(demoId)) userId = demoId;
+      }
+      if (identity && req.method === "GET" && req.path === "/me") {
+        const db = await readDatabase();
+        if (!db.users.some(user => user.id === identity.id)) {
+          db.users.push({ id: identity.id, name: identity.name, age: 0, ageGroup: "16+" });
+          await writeDatabase(db);
+        }
+      }
+      if (userId) resolvedUsers.set(req, userId);
+      const publicRead = req.method === "GET" && (
+        /^\/activities(?:\/[^/]+)?$/.test(req.path) || /^\/(max|telegram)\/status$/.test(req.path));
+      if (!publicRead && !userId) return void res.status(401).json({ message: "Откройте Сходку через бота MAX или Telegram" });
+      if (userId && !publicRead && req.path !== "/me") {
+        const db = await readDatabase();
+        const user = db.users.find(item => item.id === userId);
+        if (!user || user.age < 16) return void res.status(403).json({ message: "Сначала укажите возраст в профиле (16+)" });
+      }
+      next();
+    } catch {
+      res.status(401).json({ message: "Не удалось проверить вход. Откройте приложение заново через бота" });
+    }
+  });
+});
+
+app.get("/api/me", async (req, res, next) => {
+  try {
+    const db = await readDatabase();
+    const user = db.users.find(item => item.id === userIdFromRequest(req));
+    res.json({ user, demo: demoEnabled() && user?.id.startsWith("user-") });
+  } catch (error) { next(error); }
+});
+app.patch("/api/me", async (req, res, next) => {
+  try {
+    const age = Number(req.body.age);
+    if (!Number.isInteger(age) || age < 16 || age > 100) return res.status(400).json({ message: "Укажите возраст от 16 до 100 лет" });
+    const db = await readDatabase();
+    const user = db.users.find(item => item.id === userIdFromRequest(req));
+    if (!user) return res.status(404).json({ message: "Профиль не найден" });
+    user.age = age;
+    await writeDatabase(db);
+    res.json({ user });
+  } catch (error) { next(error); }
+});
+app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegramConnectionStatus()); });
 
 function userIdFromRequest(req: express.Request): string {
-  return String(req.header("x-user-id") ?? "user-1");
+  return String(resolvedUsers.get(req) ?? "");
 }
 
 function participantsForActivity(db: Awaited<ReturnType<typeof readDatabase>>, activity: Activity) {
@@ -171,6 +231,7 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     const db = await readDatabase();
     const activity = db.activities.find((item) => item.id === req.params.id);
     if (!activity) return res.status(404).json({ message: "Активность не найдена" });
+    if (new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка уже прошла" });
     if (activity.status !== "open") return res.status(409).json({ message: "Набор уже закрыт" });
     if (activity.organizerId === userId) return res.status(409).json({ message: "Организатор уже участвует" });
     const user = db.users.find((item) => item.id === userId);
@@ -193,7 +254,7 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     };
     db.applications.push(application);
     await writeDatabase(db);
-    await sendMaxNotification({ userId: activity.organizerId, text: `Новая заявка на «${activity.title}»` });
+    await sendNotification({ userId: activity.organizerId, text: `Новая заявка на «${activity.title}»` });
     res.status(201).json(application);
   } catch (error) {
     next(error);
@@ -202,6 +263,7 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
 
 app.get("/api/users/:userId/activities", async (req, res, next) => {
   try {
+    if (req.params.userId !== userIdFromRequest(req)) return res.status(403).json({ message: "Недостаточно прав" });
     const db = await readDatabase();
     const applications = db.applications.filter((item) => item.userId === req.params.userId);
     const appliedIds = new Set(applications.map((item) => item.activityId));
@@ -230,6 +292,7 @@ app.get("/api/users/:userId/activities", async (req, res, next) => {
 
 app.get("/api/organizers/:userId/applications", async (req, res, next) => {
   try {
+    if (req.params.userId !== userIdFromRequest(req)) return res.status(403).json({ message: "Недостаточно прав" });
     const db = await readDatabase();
     const activityIds = new Set(db.activities.filter((item) => item.organizerId === req.params.userId).map((item) => item.id));
     const results = db.applications
@@ -256,16 +319,17 @@ app.patch("/api/applications/:id", async (req, res, next) => {
     if (!application) return res.status(404).json({ message: "Заявка не найдена" });
     const activity = db.activities.find((item) => item.id === application.activityId);
     if (!activity || activity.organizerId !== organizerId) return res.status(403).json({ message: "Недостаточно прав" });
-    if (status === "approved" && activity.approvedCount >= activity.capacity) {
+    if (activity.status === "cancelled" || new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка завершена или отменена" });
+    if (status === "approved" && application.status !== "approved" && activity.approvedCount >= activity.capacity) {
       return res.status(409).json({ message: "Все места уже заняты" });
     }
 
     if (application.status === "approved" && status !== "approved") activity.approvedCount -= 1;
     if (application.status !== "approved" && status === "approved") activity.approvedCount += 1;
     application.status = status as "approved" | "rejected";
-    if (activity.approvedCount >= activity.capacity) activity.status = "full";
+    activity.status = activity.approvedCount >= activity.capacity ? "full" : "open";
     await writeDatabase(db);
-    await sendMaxNotification({
+    await sendNotification({
       userId: application.userId,
       text: status === "approved" ? `Ваша заявка на «${activity.title}» подтверждена` : `Заявка на «${activity.title}» отклонена`,
     });
@@ -284,6 +348,7 @@ app.post("/api/activities/:id/cancel", async (req, res, next) => {
     if (activity.organizerId !== organizerId) return res.status(403).json({ message: "Недостаточно прав" });
     activity.status = "cancelled";
     await writeDatabase(db);
+    await Promise.all(db.applications.filter(item => item.activityId === activity.id && item.status === "approved").map(item => sendNotification({ userId: item.userId, text: `Сходка «${activity.title}» отменена` })));
     res.json(activity);
   } catch (error) {
     next(error);
@@ -300,9 +365,11 @@ const server = app.listen(port, "0.0.0.0", () => {
 });
 
 const stopMaxBot = startMaxBot();
+const stopTelegramBot = startTelegramBot();
 
 function shutdown() {
   stopMaxBot?.();
+  stopTelegramBot?.();
   server.close(() => process.exit(0));
 }
 

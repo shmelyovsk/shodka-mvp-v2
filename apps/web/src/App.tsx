@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { api, DEFAULT_USER_ID } from "./api";
+import { api, DEFAULT_USER_ID, type Profile } from "./api";
 import type { Activity, OrganizerApplication } from "./types";
 
 type Tab = "catalog" | "create" | "requests" | "mine";
@@ -136,6 +136,10 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
 }
 
 function App() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [demo, setDemo] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authReady, setAuthReady] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(DEFAULT_USER_ID);
   const [tab, setTab] = useState<Tab>("catalog");
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -147,6 +151,20 @@ function App() {
   const [place, setPlace] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api<{ user: Profile; demo: boolean }>("/api/me").then(result => {
+      setProfile(result.user); setCurrentUserId(result.user.id); setDemo(result.demo);
+    }).catch(error => setAuthError(error.message)).finally(() => setAuthReady(true));
+  }, []);
+  async function saveAge(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      const age = new FormData(event.currentTarget).get("age");
+      const result = await api<{ user: Profile }>("/api/me", { method: "PATCH", body: JSON.stringify({ age }) }, currentUserId);
+      setProfile(result.user); setAuthError("");
+    } catch (error) { setAuthError(error instanceof Error ? error.message : "Ошибка сохранения"); }
+  }
 
   async function loadActivities(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -175,8 +193,8 @@ function App() {
     const refreshTimer = window.setInterval(() => void loadActivities(false), 60_000);
     return () => window.clearInterval(refreshTimer);
   }, []);
-  useEffect(() => { if (tab === "mine") void loadMine(); }, [tab, currentUserId]);
-  useEffect(() => { if (tab === "requests") void loadApplications(); }, [tab, currentUserId]);
+  useEffect(() => { if (tab === "mine") void loadMine().catch(error => setMessage(error.message)); }, [tab, currentUserId]);
+  useEffect(() => { if (tab === "requests") void loadApplications().catch(error => setMessage(error.message)); }, [tab, currentUserId]);
 
   const sports = useMemo(() => ["Все", ...Array.from(new Set(activities.map((item) => item.sport)))], [activities]);
   const visible = activities.filter((item) => {
@@ -269,6 +287,9 @@ function App() {
     setMessage(userId === "user-1" ? "Демо-профиль: Ира" : "Демо-профиль: Саша");
   }
 
+  if (!authReady) return <div className="app-shell"><p className="empty">Проверяем вход…</p></div>;
+  if (!profile) return <div className="app-shell"><h1>Сходка</h1><p>{authError}</p><p>Откройте приложение из бота MAX или Telegram.</p><a href="https://t.me/skhodkaa_bot">Telegram</a> · <a href="https://max.ru/t221_hakaton_max_bot">MAX</a></div>;
+  if (profile.age < 16) return <div className="app-shell"><h1>Добро пожаловать, {profile.name}</h1><p>Сходка предназначена для пользователей 16+. Возраст указывается вами и виден другим участникам.</p><form className="form" onSubmit={saveAge}><label>Ваш возраст<input required type="number" name="age" min="16" max="100" /></label><button className="primary" type="submit">Продолжить</button>{authError && <p role="alert">{authError}</p>}</form></div>;
   return (
     <div className="app-shell">
       <header>
@@ -276,14 +297,14 @@ function App() {
           <span className="eyebrow">Москва · 16+</span>
           <h1>Сходка</h1>
         </div>
-        <div className="avatar">{currentUserId === "user-1" ? "И" : "С"}</div>
+        <div className="avatar">{demo ? (currentUserId === "user-1" ? "И" : "С") : profile.name.slice(0, 1)}</div>
       </header>
 
-      <div className="demo-switcher" aria-label="Переключение демонстрационного профиля">
+      {demo && <div className="demo-switcher" aria-label="Переключение демонстрационного профиля">
         <span>Демо-профиль</span>
         <button className={currentUserId === "user-1" ? "active" : ""} onClick={() => switchDemoUser("user-1")}>Ира</button>
         <button className={currentUserId === "user-2" ? "active" : ""} onClick={() => switchDemoUser("user-2")}>Саша</button>
-      </div>
+      </div>}
 
       <main>
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}

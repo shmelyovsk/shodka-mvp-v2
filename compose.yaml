@@ -4,9 +4,13 @@ services:
       context: .
       dockerfile: apps/server/Dockerfile
     environment:
+      NODE_ENV: production
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_POLLING_ENABLED: ${TELEGRAM_BOT_POLLING_ENABLED:-false}
       PORT: 3000
       WEB_ORIGIN: http://localhost:8080
       DATA_FILE: /app/data/db.json
+      MAX_BOT_USERNAME: ${MAX_BOT_USERNAME:-t221_hakaton_max_bot}
       MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
       MAX_BOT_API_URL: ${MAX_BOT_API_URL:-}
       MAX_BOT_POLLING_ENABLED: ${MAX_BOT_POLLING_ENABLED:-true}

@@ -49,7 +49,7 @@ export async function readDatabase(): Promise<Database> {
 }
 
 export async function writeDatabase(database: Database): Promise<void> {
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.catch(() => {}).then(async () => {
     await fs.mkdir(path.dirname(dataFile), { recursive: true });
     const temporary = `${dataFile}.tmp`;
     await fs.writeFile(temporary, JSON.stringify(database, null, 2), "utf8");
