@@ -1,10 +1,11 @@
-import { FormEvent, createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, DEFAULT_USER_ID, type Profile } from "./api";
 import { SupportView } from "./SupportView";
 import { ModerationView } from "./ModerationView";
 import { FriendsView } from "./FriendsView";
 import { PublicProfileModal } from "./PublicProfileModal";
-import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
+import { CreateMeetup } from "./CreateMeetup";
+import { Icon } from "./Icon";
 import { ProfileView } from "./ProfileView";
 import { NavIcon } from "./NavIcon";
 import { activityPhase, inHistoryTab, type HistoryTab } from "./history";
@@ -72,11 +73,6 @@ function reminderLabel(value: string) {
   return `Через ${days} дн. · ${formatDate(value)}`;
 }
 
-function minimumDateTime() {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
-}
 
 function PersonAvatar({ name, avatarUrl, size = "small" }: { name: string; avatarUrl?: string; size?: "small" | "large" }) {
   const [failedUrl, setFailedUrl] = useState<string>();
@@ -111,43 +107,24 @@ function ParticipantList({ participants }: { participants?: Activity["participan
   );
 }
 
-function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => void }) {
-  const openProfile = useContext(ProfileOpener);
-  const favorites=useContext(FavoriteActions);
-  const free = activity.capacity - activity.approvedCount;
-  return (
-    <article className="activity-card" onClick={onOpen}>
-      <div className="card-topline">
-        <span className="sport-pill">{activity.sport}</span>
-        <span className={free <= 2 ? "places hot" : "places"}>{activity.moderationHidden ? "Скрыта модерацией" : outcomeLabel(activity) || (free > 0 ? `${free} мест` : "Набор закрыт")}</span>
-        <button type="button" className="bookmark-button" aria-label={favorites.ids.has(activity.id)?"Убрать из избранного":"В избранное"} aria-pressed={favorites.ids.has(activity.id)} onClick={event=>{event.stopPropagation();favorites.toggle(activity.id);}}><svg width="22" height="22" viewBox="0 0 24 24" fill={favorites.ids.has(activity.id)?"currentColor":"none"} stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4V3Z"/></svg></button>
-      </div>
-      <h3><button className="card-title-button" onClick={event=>{event.stopPropagation();onOpen();}}>{activity.title}</button></h3>
-      <p className="meta">{formatDate(activity.date)}</p>
-      <p className="meta">{activity.district} · {activity.publicPlace}</p>
-      {activity.organizer && (
-        <button className="organizer-inline profile-inline" onClick={event=>{event.stopPropagation();if(activity.organizer)openProfile(activity.organizer.id);}}>
-          <PersonAvatar name={activity.organizer.name} avatarUrl={activity.organizer.avatarUrl} />
-          <span>Организатор <strong>{activity.organizer.name}</strong><RatingBadge rating={activity.organizer.rating} reviewsCount={activity.organizer.reviewsCount} /></span>
-        </button>
-      )}
-      <ParticipantList participants={activity.participants} />
-      <div className="card-footer">
-        <span>Кого ждём: {levelNames[activity.level].toLowerCase()}<br/>Возраст: {activity.ageGroup}{activity.minAge!==undefined&&activity.maxAge!==undefined?" лет":""}</span>
-        <strong>{activity.price ? `${activity.price} ₽ с человека` : "Бесплатно"}</strong>
-      </div>
-      {activity.relation && (
-        <span className={`relation-status ${activity.applicationStatus ?? "organizer"}`}>
-          {activity.relation === "organizer"
-            ? "Вы организатор"
-            : applicationStatusNames[activity.applicationStatus ?? "pending"]}
-        </span>
-      )}
-    </article>
-  );
+function scheduleDay(value:string){const day=moscowDay(new Date(value)),today=moscowDay(new Date()),tomorrow=moscowDay(new Date(Date.now()+86400000));return day===today?"Сегодня":day===tomorrow?"Завтра":new Intl.DateTimeFormat("ru-RU",{day:"numeric",month:"short",timeZone:"Europe/Moscow"}).format(new Date(value));}
+function ActivityCard({activity,onOpen}:{activity:Activity;onOpen:()=>void}){
+ const openProfile=useContext(ProfileOpener),favorites=useContext(FavoriteActions),free=activity.capacity-activity.approvedCount;
+ return <article className={"schedule-event "+(activity.category==="games"?"gaming ":"")+(terminal(activity)?"quiet":"")}>
+ <div className="time-column"><time dateTime={activity.date}>{formatTime(activity.date)}</time><span>{scheduleDay(activity.date)}</span></div>
+ <div className="event-body"><div className="event-top"><span className="event-sport">{activity.sport}</span><button type="button" className="bookmark-button" aria-label={favorites.ids.has(activity.id)?"Убрать из избранного":"В избранное"} aria-pressed={favorites.ids.has(activity.id)} onClick={()=>favorites.toggle(activity.id)}><Icon name="bookmark" size={19}/></button></div>
+ <h3><button className="card-title-button" onClick={onOpen}>{activity.title}</button></h3>
+ <p className="event-place">{activity.format==="online"?"Онлайн, из дома":activity.publicPlace+" · "+activity.district}</p>
+ <p className="event-level">{levelNames[activity.level]} · {activity.ageGroup}{activity.minAge!==undefined&&activity.maxAge!==undefined?" лет":""}</p>
+ {activity.organizer&&<button className="event-host profile-inline" onClick={()=>openProfile(activity.organizer!.id)}>Собирает {activity.organizer.name}</button>}
+ <div className="event-bottom"><div className="event-attendance"><div className="avatar-stack">{(activity.participants?.length?activity.participants.slice(0,3):activity.organizer?[activity.organizer]:[]).map(person=><button type="button" key={person.id} onClick={()=>openProfile(person.id)} title={person.name}><PersonAvatar name={person.name} avatarUrl={person.avatarUrl}/></button>)}</div><span>{outcomeLabel(activity)||(free>0?"Ещё "+free+" мест":"Набор закрыт")}<small>{activity.price?activity.price+" ₽ с человека":"Бесплатно"}</small></span></div><button className="event-open" onClick={onOpen} aria-label={"Открыть: "+activity.title}><Icon name="arrow-up-right" size={20}/></button></div>
+ {activity.relation&&<span className="relation-status">{activity.relation==="organizer"?"Ты организатор":applicationStatusNames[activity.applicationStatus??"pending"]}</span>}
+ </div></article>;
 }
 
 function App() {
+  const [filtersOpen,setFiltersOpen]=useState(false);
+  const [mineRelation,setMineRelation]=useState<"participant"|"organizer">("participant");
   const [favorites,setFavorites]=useState<Activity[]>([]);
   const [favoriteBusy,setFavoriteBusy]=useState(false);
   const [formatFilter,setFormatFilter]=useState("all");
@@ -159,9 +136,6 @@ function App() {
   const [viewedUser, setViewedUser] = useState<string | null>(null);
   const [friendsOnly, setFriendsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [createCategory, setCreateCategory] = useState<"sport"|"games">("sport");
-  const [createFormat, setCreateFormat] = useState<"offline"|"online">("offline");
-  const [chosenActivity, setChosenActivity] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [demo, setDemo] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -179,6 +153,8 @@ function App() {
   const [place, setPlace] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [tab]);
 
   useEffect(() => {
     api<{ user: Profile; demo: boolean; moderator:boolean }>("/api/me").then(result => {
@@ -252,7 +228,7 @@ function App() {
     const matchesPlace = !placeQuery || `${item.district} ${item.publicPlace}`.toLocaleLowerCase("ru").includes(placeQuery);
     return (categoryFilter === "all" || (item.category??"sport") === categoryFilter) && !terminal(item) && moscowDay(new Date(item.date)) >= moscowDay(new Date(clock)) && (formatFilter==="all"||(item.format??"offline")===formatFilter) && (!freeOnly||(item.status==="open"&&item.capacity>item.approvedCount&&Date.parse(item.date)>clock)) && (!favoritesOnly||favorites.some(f=>f.id===item.id)) && matchesSport && matchesDateFilter(item.date, dateFilter) && matchesPlace;
   });
-  const displayedMine = mine.filter(item => inHistoryTab(item, historyTab, new Date(clock))).sort((a, b) => historyTab === "upcoming" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date));
+  const displayedMine = mine.filter(item => item.relation === mineRelation && inHistoryTab(item, historyTab, new Date(clock))).sort((a, b) => historyTab === "upcoming" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date));
   const reminders = mine
     .filter((item) => !terminal(item) && (item.relation === "organizer" || item.applicationStatus === "approved"))
     .filter((item) => {
@@ -281,29 +257,11 @@ function App() {
     }
   }
 
-  async function createActivity(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!requireAge()) return;
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const payload = Object.fromEntries(form.entries());
-    if (payload.sport === "Другое") payload.sport = String(payload.customSport??"").trim();
-    delete payload.customSport;
-    const localDate = new Date(String(payload.date));
-    if (Number.isNaN(localDate.getTime())) {
-      setMessage("Укажите корректную дату и время");
-      return;
-    }
-    payload.date = localDate.toISOString();
-    try {
-      await api<Activity>("/api/activities", { method: "POST", body: JSON.stringify(payload) }, currentUserId);
-      setMessage("Сходка опубликована");
-      formElement.reset();
-      await loadActivities();
-      setTab("mine");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Не удалось создать сходку");
-    }
+  async function createActivity(payload:Record<string,string>){
+    if(!requireAge())return false;
+    const localDate=new Date(payload.date);if(Number.isNaN(localDate.getTime())){setMessage("Укажи корректные дату и время");return false;}
+    try{await api<Activity>("/api/activities",{method:"POST",body:JSON.stringify({...payload,date:localDate.toISOString()})},currentUserId);setMessage("Сходка опубликована");await loadActivities();setMineRelation("organizer");setHistoryTab("upcoming");setTab("mine");return true;}
+    catch(error){setMessage(error instanceof Error?error.message:"Не удалось создать сходку");return false;}
   }
 
   async function cancelActivity() {
@@ -349,7 +307,7 @@ function App() {
     <ProfileOpener.Provider value={setViewedUser}><FavoriteActions.Provider value={{ids:new Set(favorites.map(a=>a.id)),toggle:id=>void toggleFavorite(id)}}>
     <div className="app-shell">
       <header className="site-header">
-        {(tab === "profile" || tab === "moderation" || tab === "support") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва <span className="age-mark">· 16+</span></span>}
+        {(tab === "profile" || tab === "moderation" || tab === "support") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <div className="brand-lockup"><span className="wordmark">СХОДКА</span><span className="city-label">Москва · 16+</span></div>}
         <button className="profile-button" aria-label="Открыть личный кабинет" aria-current={tab === "profile" ? "page" : undefined} onClick={() => navigate("profile")}>
           <PersonAvatar name={demo ? (currentUserId === "user-1" ? "Ира" : "Саша") : profile.name} avatarUrl={demo ? undefined : profile.avatarUrl} size="large" />
         </button>
@@ -365,7 +323,7 @@ function App() {
         {(profile.moderationWarning||profile.suspended)&&<div className="notice" role="alert">{profile.suspended?"Ваш аккаунт ограничен модерацией. Публикации и заявки недоступны.":profile.moderationWarning}</div>}
         {tab === "support" && moderator && <SupportView currentUserId={currentUserId}/>}
         {tab === "moderation" && moderator && <ModerationView currentUserId={currentUserId} onChanged={()=>void loadActivities(false)}/>}
-        {(tab==="mine"||tab==="requests"||tab==="favorites")&&<div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{activeApplications.length}</span></button><button className={tab==="favorites"?"active":""} onClick={()=>setTab("favorites")}>Избранное</button></div>}
+        {(tab==="mine"||tab==="requests"||tab==="favorites")&&<><section className="intro-panel"><h1>Твои планы.<br/>Твоя компания.</h1><p>Встречи, которые хочется не пропустить.</p></section><div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{activeApplications.length}</span></button><button className={tab==="favorites"?"active":""} onClick={()=>setTab("favorites")}>Избранное</button></div></>}
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}
         {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} moderator={moderator} onSupport={()=>navigate("support")} onModeration={()=>navigate("moderation")} />}
 
@@ -374,12 +332,8 @@ function App() {
 
         {tab === "catalog" && (
           <>
-            <section className="hero">
-              <img src="/shodka-court.webp" alt="Спортивная площадка «Сходка»" />
-              <button className="primary hero-action" onClick={() => navigate("create")}>Создать сходку</button>
-            </section>
+            <section className="intro-panel home-intro"><h1>Есть место<br/>для тебя.</h1><p>Присоединяйся к тем, кто уже собирается.</p></section>
             <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все'],['sport','Спорт'],['games','Компьютерные игры']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} onClick={()=>{setCategoryFilter(value);setSport("Все");}}>{label}</button>)}</div>
-            <label className="friends-filter"><input type="checkbox" checked={friendsOnly} onChange={event=>setFriendsOnly(event.target.checked)}/> Организуют друзья</label>
             <div className="filter-group">
               <span className="filter-label">Когда</span>
               <div className="chips compact">
@@ -388,6 +342,7 @@ function App() {
                 ))}
               </div>
             </div>
+            <details className="filter-drawer" open={filtersOpen} onToggle={event=>setFiltersOpen(event.currentTarget.open)}><summary><span><Icon name="sliders-horizontal" size={18}/>Настроить поиск</span><Icon name="chevron-down" size={17}/></summary><label className="friends-filter"><input type="checkbox" checked={friendsOnly} onChange={event=>setFriendsOnly(event.target.checked)}/> Организуют друзья</label>
             <div className="filter-group">
               <span className="filter-label">Занятие</span>
               <div className="chips compact">
@@ -399,7 +354,8 @@ function App() {
               <input value={place} onChange={(event) => setPlace(event.target.value)} placeholder="Район, метро или место" />
             </label>
             <div className="catalog-extra-filters"><label>Формат<select value={formatFilter} onChange={e=>setFormatFilter(e.target.value)}><option value="all">Любой</option><option value="offline">Офлайн</option><option value="online">Онлайн</option></select></label><label className="friends-filter"><input type="checkbox" checked={freeOnly} onChange={e=>setFreeOnly(e.target.checked)}/>Есть свободные места</label><label className="friends-filter"><input type="checkbox" checked={favoritesOnly} onChange={e=>setFavoritesOnly(e.target.checked)}/>Только избранное</label><button className="text-button" onClick={()=>{setSport("Все");setDateFilter("all");setPlace("");setCategoryFilter("all");setFriendsOnly(false);setFormatFilter("all");setFreeOnly(false);setFavoritesOnly(false);}}>Сбросить фильтры</button></div>
-            <section className="section-heading"><h2>Ближайшие сходки</h2><span>{visible.length}</span></section>
+            </details>
+            <section className="section-heading"><h2>Ищут компанию</h2><span>{visible.length}</span></section>
             {loading ? <p className="empty">Загружаем активности…</p> : (
               <div className="activity-list">
                 {visible.map((item) => <ActivityCard key={item.id} activity={item} onOpen={() => void openActivity(item.id)} />)}
@@ -409,44 +365,22 @@ function App() {
           </>
         )}
 
-        {tab === "create" && (
-          <section>
-            <div className="section-heading"><h2>Новая сходка</h2></div>
-            <form className="form" onSubmit={createActivity}>
-              <label>Название<input required name="title" placeholder="Волейбол после пар" /></label>
-              <label>Категория<select name="category" value={createCategory} onChange={event=>{setCreateCategory(event.target.value as "sport"|"games");setChosenActivity("");}}><option value="sport">Спорт</option><option value="games">Компьютерные игры</option></select></label>
-              <label>Занятие<select required name="sport" value={chosenActivity} onChange={event=>setChosenActivity(event.target.value)}><option value="" disabled>Выберите</option>{(createCategory==="sport"?SPORT_OPTIONS:GAME_OPTIONS).map(item=><option key={item}>{item}</option>)}<option>Другое</option></select></label>
-              {chosenActivity==="Другое"&&<label>Какое занятие?<input required name="customSport" maxLength={80} placeholder="Напишите название спорта или игры"/></label>}
-              <label>Формат<select name="format" value={createFormat} onChange={event=>setCreateFormat(event.target.value as "offline"|"online")}><option value="offline">{createCategory==="games"?"Компьютерный клуб":"Личная встреча"}</option><option value="online">Онлайн, из дома</option></select></label>
-              {createCategory==="games"&&<label>Платформа / сервер / уровень<input name="gamePlatform" maxLength={100} placeholder="Например, ПК · Steam · любой ранг"/></label>}
-              <label>Дата и время<input required type="datetime-local" name="date" min={minimumDateTime()} /></label>
-              <div className="form-row">{createFormat==="offline"&&<label>Район<input required name="district" placeholder="Сокол" /></label>}<label>Участников<input required type="number" min="2" max="30" name="capacity" defaultValue="4" /></label></div>
-              {createFormat==="offline"&&<label>Публичное место<input required name="publicPlace" placeholder={createCategory==="games"?"Название компьютерного клуба":"Спортивный центр рядом с метро"} /></label>}
-              {createFormat==="offline"?<label>Точный адрес<input name="exactAddress" placeholder="Увидят только подтверждённые участники" /></label>:<label>Ссылка подключения<input name="connectionLink" type="url" maxLength={2048} placeholder="https://… (необязательно)"/><span className="form-hint">Ссылку увидят только принятые участники. Без ссылки договоритесь через организатора.</span></label>}
-              <div className="form-row"><label>Кого ждём<select name="level" defaultValue="any"><option value="beginner">Новичков</option><option value="any">Любой уровень</option><option value="intermediate">С опытом</option></select></label><label>С человека, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
-              <div className="form-row"><label>Возраст от<input type="number" min="16" max="100" name="minAge" placeholder="Необязательно" /></label><label>Возраст до<input type="number" min="16" max="100" name="maxAge" placeholder="Необязательно" /></label></div>
-              <p className="form-hint">Если поля пустые, присоединиться сможет любой пользователь 16+.</p>
-              {createCategory!=="games"&&<label>Инвентарь<input name="equipment" placeholder="Мяч уже есть" /></label>}
-              <label>Описание<textarea name="description" rows={3} placeholder="Расскажите о формате встречи" /></label>
-              <button className="primary full" type="submit">Опубликовать</button>
-            </form>
-          </section>
-        )}
+        {tab === "create" && <CreateMeetup onPublish={createActivity}/>}
 
         {tab === "mine" && (
-          <section>
+          <section><div className="choice-row mine-relation"><button className="choice" aria-pressed={mineRelation==="participant"} onClick={()=>setMineRelation("participant")}>Участвую</button><button className="choice" aria-pressed={mineRelation==="organizer"} onClick={()=>setMineRelation("organizer")}>Организую</button></div>
             {historyTab === "upcoming" && !!reminders.length && (
               <div className="reminders">
                 <div className="section-heading"><h2>Не забудьте</h2><span>{reminders.length}</span></div>
                 {reminders.map((item) => (
                   <button className="reminder-card" key={item.id} onClick={() => void openActivity(item.id)}>
-                    <span className="reminder-icon">⏰</span>
+                    <span className="reminder-icon"><Icon name="clock-3" size={21}/></span>
                     <span><strong>{reminderLabel(item.date)}</strong><small>{item.title} · {item.district}</small></span>
                   </button>
                 ))}
               </div>
             )}
-            <div className="section-heading"><h2>Мои сходки</h2><span>{displayedMine.length}</span></div>
+            <div className="section-heading"><h2>{mineRelation==="organizer"?"Ты собираешь":"Ты участвуешь"}</h2><span>{displayedMine.length}</span></div>
             <div className="history-tabs" role="group" aria-label="История сходок">{(["upcoming", "past", "cancelled"] as HistoryTab[]).map(item => <button key={item} aria-pressed={historyTab === item} className={historyTab === item ? "active" : ""} onClick={() => setHistoryTab(item)}>{{ upcoming: "Предстоящие", past: "Прошедшие", cancelled: "Отменены / не состоялись" }[item]}</button>)}</div>
             {historyTab === "past" && <p className="history-note">«Состоялась» — отметка организатора. Если итог не указан, встреча попадает сюда после полуночи по Москве.</p>}
             <div className="activity-list">
@@ -493,10 +427,9 @@ function App() {
 
       {selected && (
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
-          <article className="modal" onClick={(event) => event.stopPropagation()}>
-            <button className="close" onClick={() => setSelected(null)}>×</button>
-            <span className="sport-pill">{selected.sport}</span>
-            <h2>{selected.title}</h2>
+          <article className="modal meetup-modal" role="dialog" aria-modal="true" aria-label={selected.title} onClick={(event) => event.stopPropagation()}>
+            <button className="close" aria-label="Закрыть сходку" onClick={() => setSelected(null)}><Icon name="x"/></button>
+            <section className="detail-hero"><div className="detail-time"><strong>{formatTime(selected.date)}</strong><span>{scheduleDay(selected.date)}</span></div><span className="event-sport">{selected.sport}</span><h2>{selected.title}</h2><p>{selected.format==="online"?"Онлайн, из дома":selected.publicPlace+" · "+selected.district}</p><p>{levelNames[selected.level]}</p></section>
             <p className="modal-lead">{selected.description}</p>
             {selected.organizer && (
               <button className="organizer-profile profile-inline" onClick={()=>setViewedUser(selected.organizerId)}>

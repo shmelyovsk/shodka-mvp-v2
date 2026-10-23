@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Icon } from "./Icon";
 import { api } from "./api";
 import type { Friend, PublicUser } from "./socialTypes";
 
@@ -14,13 +15,13 @@ export function FriendsView({ currentUserId, onProfile }: {currentUserId: string
     catch(error) { setMessage(error instanceof Error ? error.message : "Не удалось изменить запрос"); }
     finally { setBusy(false); }
   }
-  return <section className="friends-page"><div className="section-heading"><h2>Друзья</h2></div>
+  return <section className="friends-page"><section className="intro-panel"><h1>Свои люди.<br/>Общие планы.</h1><p>Сохраняй знакомства — собраться ещё раз будет проще.</p></section>
     <p className="history-note">После принятия запроса вы увидите подтверждённые Telegram-контакты друг друга. Для остальных пользователей они скрыты.</p>
     <form className="friend-search" onSubmit={async event => {event.preventDefault();setBusy(true);setMessage("");try {const data=await api<PublicUser[]>(`/api/people?q=${encodeURIComponent(query)}`,{},currentUserId);setResults(data);if(!data.length)setMessage("По такому нику никого не нашли");}catch(error){setMessage(error instanceof Error?error.message:"Ошибка поиска");}finally{setBusy(false);}}}>
-      <label htmlFor="nickname-search">Найти по нику СХОДКИ</label><div><input id="nickname-search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="@ira_sport" maxLength={25}/><button className="primary" disabled={busy}>Найти</button></div>
+      <label htmlFor="nickname-search">Найти по нику СХОДКИ</label><div><input id="nickname-search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="@ira_sport" maxLength={25}/><button className="primary search-button" disabled={busy} aria-label="Найти друга"><Icon name="search" size={20}/></button></div>
     </form>
     {message && <p className="account-feedback" role="status">{message}</p>}
-    {results.map(user=><button key={user.id} className="person-row" onClick={()=>onProfile(user.id)}>{user.avatarUrl&&<img src={user.avatarUrl} alt=""/>}<span><strong>{user.name}</strong><small>@{user.nickname}</small></span><span aria-hidden="true">→</span></button>)}
+    {results.map(user=><button key={user.id} className="person-row" onClick={()=>onProfile(user.id)}>{user.avatarUrl&&<img src={user.avatarUrl} alt=""/>}<span><strong>{user.name}</strong><small>@{user.nickname}</small></span><Icon name="arrow-up-right" size={19}/></button>)}
     {(["incoming","accepted","outgoing"] as const).map(group=>{
       const list=friends.filter(item=>group==="accepted"?item.status==="accepted":item.status==="pending"&&item.incoming===(group==="incoming"));
       return <section key={group} className="friend-group"><h3>{{incoming:"Входящие запросы",accepted:"Мои друзья",outgoing:"Отправленные запросы"}[group]} <span>{list.length}</span></h3>
