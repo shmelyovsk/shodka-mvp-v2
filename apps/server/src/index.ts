@@ -7,7 +7,7 @@ import { getMaxConnectionStatus, startMaxBot } from "./max.js";
 import { requestIdentity, demoEnabled } from "./auth.js";
 import { sendNotification } from "./notifications.js";
 import { startTelegramBot, getTelegramConnectionStatus } from "./telegram.js";
-import { checkContent, ContentRejected, installModerationRoutes, isModerator } from "./moderation.js";
+import { checkContent, ContentRejected, installModerationRoutes, isModerator, queueLegacyTextReports } from "./moderation.js";
 import { StorageConflict } from "./postgres.js";
 import { installSocialRoutes, publicProfile, visibleActivity } from "./social.js";
 import type { Activity, SkillLevel, User } from "./types.js";
@@ -25,7 +25,7 @@ const port = Number(process.env.PORT ?? 3000);
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json({ limit: "600kb" }));
 const API_VERSION = 4;
-app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support","verifiedContacts","meetupLifecycle"],release:"meetups-v4"}));
+app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support","verifiedContacts","meetupLifecycle","communityFilter"],release:"community-v4"}));
 app.use("/api",(_req,res,next)=>{res.setHeader("Cache-Control","no-store");next();});
 const resolvedUsers = new WeakMap<express.Request, string>();
 // Serialize API operations in this process; PostgreSQL versions also protect across processes.
@@ -165,7 +165,7 @@ function ageLimitLabel(minAge?: number, maxAge?: number): string {
 }
 
 app.get("/health", async (_req, res) => {
-  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"meetups-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
+  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"community-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
   catch { res.status(503).json({ status: "unavailable", service: "shodka-api", storage: storageKind }); }
 });
 
@@ -395,6 +395,7 @@ app.get("/api/organizers/:userId/applications", async (req, res, next) => {
     const activityIds = new Set(db.activities.filter((item) => item.organizerId === req.params.userId).map((item) => item.id));
     const results = db.applications
       .filter((item) => activityIds.has(item.activityId))
+      .filter(item=>req.query.history==="true"||(item.status==="pending"&&db.activities.some(a=>a.id===item.activityId&&!terminal(a)&&!a.moderationHidden&&Date.parse(a.date)>Date.now())))
       .map((application) => ({
         ...application,
         activity: db.activities.find((item) => item.id === application.activityId),
@@ -468,6 +469,7 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 
 try { await readDatabase(); }
 catch { console.error("Storage initialization failed. Check DATABASE_URL and database access"); await closeDatabase(); process.exit(1); }
+try { await queueLegacyTextReports(); } catch { console.error("Не удалось проверить ранее опубликованные тексты. Повторим при следующем запуске"); }
 console.log(`Storage: ${storageKind}`);
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`Shodka API listening on ${port}`);

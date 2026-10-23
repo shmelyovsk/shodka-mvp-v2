@@ -1,20 +1,10 @@
+import {isRejectedText} from "./textFilter.js";
 import type { Express } from "express";
 import { nanoid } from "nanoid";
 import { readDatabase, writeDatabase } from "./store.js";
 import type { ContentReport, Database } from "./types.js";
 
-export class ContentRejected extends Error {}
-export function checkContent(...values: unknown[]) {
-  const raw = values.filter(value => typeof value === "string").join(" ").normalize("NFKC").toLowerCase().replace(/ё/g,"е").replace(/[\u200b-\u200f\ufeff]/g,"");
-  // Conservative baseline. Reports and human review handle context and evasions.
-  const latin = /(?:^|[^a-z])(?:fuck\w*|shit\w*|bitch\w*)(?:$|[^a-z])/i;
-  const map: Record<string,string> = {x:"х",y:"у",e:"е",a:"а",o:"о",c:"с",p:"р",k:"к",m:"м",t:"т",0:"о",3:"з"};
-  const ru = /[а-я]/.test(raw) ? raw.replace(/[xyeaocpkmt03]/g,char=>map[char]??char) : raw;
-  const compact = ru.replace(/(?<=\p{L})[._*\-]+(?=\p{L})/gu,"").replace(/х\s+у\s+й/gu,"хуй");
-  const explicit = /(?:^|[^\p{L}\p{N}])(?:хуй\p{L}*|ху[ея]\p{L}*|пизд\p{L}*|бляд\p{L}*|бля(?:ть)?|еб[аун]\p{L}*|уеб\p{L}*|долбоеб\p{L}*)(?=$|[^\p{L}\p{N}])/u;
-  const threat = /(?:(?:убью|изобью|зарежу)\s+(?:тебя|вас|его|ее)|(?:тебя|вас|его|ее)\s+(?:убью|изобью|зарежу))/u;
-  if (latin.test(raw) || explicit.test(compact) || threat.test(compact)) throw new ContentRejected("В тексте найдены грубые выражения или угроза. Переформулируйте сообщение");
-}
+export {checkContent,ContentRejected} from "./textFilter.js";
 export function isModerator(userId: string) {
   return (process.env.MODERATOR_USER_IDS ?? "").split(",").map(value=>value.trim()).filter(Boolean).includes(userId);
 }
@@ -83,4 +73,19 @@ export function installModerationRoutes(app: Express, currentUser: (req: import(
       await writeDatabase(db);res.json({ok:true});
     }catch(error){next(error);}
   });
+}
+
+// Queue existing public content for human review. Never silently delete or ban on a new dictionary match.
+export async function queueLegacyTextReports(){
+ for(let attempt=0;attempt<3;attempt++){
+  const db=await readDatabase(),reports=reportsFor(db);let added=0;
+  const day=(date:Date)=>new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"}).format(date),today=day(new Date());
+  const add=(kind:ContentReport["kind"],targetId:string,values:unknown[])=>{if(!values.some(v=>typeof v==="string"&&isRejectedText(v))||reports.some(r=>r.kind===kind&&r.targetId===targetId&&r.reporterId==="system:text-filter-v2"))return;reports.push({id:nanoid(),kind,targetId,reporterId:"system:text-filter-v2",reason:"Автоматическая проверка обновлённым фильтром: возможны мат, оскорбление или угроза. Проверьте контекст перед решением.",createdAt:new Date().toISOString(),status:"open"});added++;};
+  for(const a of db.activities)if(!a.moderationHidden&&["open","full"].includes(a.status)&&day(new Date(a.date))>=today)add("activity",a.id,[a.title,a.description,a.sport,a.district,a.publicPlace,a.gamePlatform,a.equipment]);
+  for(const u of db.users)if(!u.suspended)add("user",u.id,[u.name,u.nickname,u.bio]);
+  for(const review of db.reviews??[])if(!review.hidden)add("review",review.id,[review.text]);
+  if(!added)return 0;
+  try{await writeDatabase(db);return added;}catch(error){if(attempt===2)throw error;}
+ }
+ return 0;
 }

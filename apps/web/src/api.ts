@@ -27,7 +27,7 @@ export function verifyServer() {
     catch { throw new Error("Сервер недоступен или просыпается. Подождите немного и откройте приложение заново"); }
     if(!response.ok || !response.headers.get("content-type")?.includes("application/json"))throw new Error(VERSION_MESSAGE);
     const meta=await response.json().catch(()=>null);
-    if(!meta || meta.apiVersion !== 4 || !Array.isArray(meta.features) || !meta.features.includes("verifiedContacts") || !meta.features.includes("meetupLifecycle"))throw new Error(VERSION_MESSAGE);
+    if(!meta || meta.apiVersion !== 4 || !Array.isArray(meta.features) || !meta.features.includes("verifiedContacts") || !meta.features.includes("meetupLifecycle") || !meta.features.includes("communityFilter"))throw new Error(VERSION_MESSAGE);
   })().catch(error=>{checkedServer=undefined;throw error;});
   return checkedServer;
 }
