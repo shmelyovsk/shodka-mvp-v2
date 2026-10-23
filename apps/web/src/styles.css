@@ -186,3 +186,48 @@ nav button:focus-visible, .profile-button:focus-visible, .text-button:focus-visi
 .history-tabs button.active { background: white; color: #17251d; box-shadow: 0 2px 6px #17251d0a; font-weight: 650; }
 .history-note { color: #69766d; font-size: 12px; line-height: 1.5; }
 @media (max-width: 360px) { .account-photo-row { padding: 12px; gap: 12px; } .account-photo { width: 64px; height: 64px; } }
+.age-mark { color:#69766d; font-size:13px; font-weight:600; }
+.profile-inline { border:0; text-align:left; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.organizer-profile.profile-inline { width:100%; background:#f3f6ef; }
+.profile-inline:focus-visible, .participant-chip:focus-visible { outline:3px solid #91ae36; outline-offset:3px; }
+button.participant-chip { border:0; text-align:left; font:inherit; color:inherit; }
+.card-title-button { border:0; background:none; padding:0; font:inherit; color:inherit; text-align:left; }
+.activity-card { cursor:pointer; }
+.catalog-categories { display:flex; flex-wrap:wrap; gap:7px; margin-top:16px; }
+.friends-filter { display:flex; align-items:center; gap:8px; color:#536057; font-size:13px; margin-top:14px; }
+.friends-filter input { accent-color:#52651f; width:17px; height:17px; }
+.friends-entry { margin-top:18px; }
+.friend-search { display:grid; gap:8px; margin:18px 0; font-size:13px; font-weight:650; }
+.friend-search > div { display:flex; gap:8px; }
+.friend-search input { min-width:0; width:100%; padding:12px; border:1px solid #dce2dc; border-radius:13px; font:inherit; background:white; }
+.person-row { display:flex; align-items:center; gap:12px; width:100%; padding:12px; text-align:left; border:0; border-radius:14px; background:white; color:#17251d; }
+.person-row img { width:42px; height:42px; object-fit:cover; border-radius:50%; }
+.person-row > span:nth-last-child(2), .person-row > span:first-of-type { flex:1; }
+.person-row strong,.person-row small { display:block; }
+.person-row small { color:#69766d; margin-top:4px; font-size:12px; }
+.friend-group { margin-top:24px; }
+.friend-group h3 { font-size:16px; }
+.friend-group h3 span { color:#69766d; margin-left:7px; font-weight:400; }
+.friend-item { border:1px solid #e0e5df; border-radius:16px; background:white; margin-bottom:10px; overflow:hidden; }
+.friend-actions { display:flex; align-items:center; gap:12px; padding:0 12px 12px; }
+.public-profile-layer { z-index:40; }
+.public-person { display:flex; gap:16px; align-items:center; margin-top:18px; }
+.public-person > div { min-width:0; }
+.public-person h2 { overflow-wrap:anywhere; font-size:24px; }
+.public-person p { color:#69766d; font-size:13px; margin:5px 0; }
+.public-rating { font-size:13px; font-weight:650; color:#69766d; margin:18px 0; }
+.public-interests { display:flex; flex-wrap:wrap; gap:7px; }
+.public-contact { border-top:1px solid #edf0ed; border-bottom:1px solid #edf0ed; margin:20px 0; padding:12px 0 18px; }
+.public-profile h3 { font-size:17px; }
+.contact-link { display:inline-block; text-decoration:none; font-size:14px; }
+.friend-status { color:#52651f; font-size:14px; }
+.public-meeting { display:grid; gap:7px; width:100%; text-align:left; padding:14px; border:1px solid #e0e5df; border-radius:16px; background:#f8faf7; margin-bottom:10px; color:#17251d; }
+.public-meeting small { color:#69766d; }
+.public-meeting span { font-size:12px; color:#52651f; }
+.public-review { padding:14px; border:1px solid #e0e5df; border-radius:14px; margin:10px 0; }
+.public-review strong,.public-review small,.public-review .text-button { display:block; }
+.public-review small { color:#69766d; font-size:11px; margin-top:4px; }
+.public-review p { font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+.public-review > .history-note { display:block; }
+.review-form { margin:20px 0; padding-top:10px; border-top:1px solid #edf0ed; }
+.contact-organizer { margin:0 0 12px; }

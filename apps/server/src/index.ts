@@ -8,6 +8,7 @@ import { requestIdentity, demoEnabled } from "./auth.js";
 import { sendNotification } from "./notifications.js";
 import { startTelegramBot, getTelegramConnectionStatus } from "./telegram.js";
 import { StorageConflict } from "./postgres.js";
+import { installSocialRoutes, publicProfile, visibleActivity } from "./social.js";
 import type { Activity, SkillLevel, User } from "./types.js";
 
 const app = express();
@@ -35,9 +36,10 @@ app.use("/api", (req, res, next) => {
         const db = await readDatabase();
         const existing = db.users.find(user => user.id === identity.id);
         if (!existing) {
-          db.users.push({ id: identity.id, name: identity.name, age: 0, ageGroup: "16+", avatarUrl: identity.avatarUrl, platformAvatarUrl: identity.avatarUrl, avatarSource: "platform" });
+          db.users.push({ id: identity.id, name: identity.name, age: 0, ageGroup: "16+", avatarUrl: identity.avatarUrl, platformAvatarUrl: identity.avatarUrl, avatarSource: "platform", telegramContact: identity.telegramContact });
           await writeDatabase(db);
-        } else if (existing.platformAvatarUrl !== identity.avatarUrl) {
+        } else if (existing.platformAvatarUrl !== identity.avatarUrl || !existing.telegramContact && identity.telegramContact) {
+          if (!existing.telegramContact && identity.telegramContact) existing.telegramContact = identity.telegramContact;
           existing.platformAvatarUrl = identity.avatarUrl;
           if (existing.avatarSource !== "custom") { existing.avatarUrl = identity.avatarUrl; existing.avatarSource = "platform"; }
           await writeDatabase(db);
@@ -97,22 +99,37 @@ app.patch("/api/me", async (req, res, next) => {
       patch.avatarUrl = req.body.avatarUrl; patch.avatarSource = "custom";
     }
     if (req.body.usePlatformAvatar === true) { patch.avatarUrl = user.platformAvatarUrl; patch.avatarSource = "platform"; }
+    if ("nickname" in req.body) {
+      if (typeof req.body.nickname !== "string") return res.status(400).json({ message: "Введите ник СХОДКИ" });
+      const nickname = req.body.nickname.trim().replace(/^@/, "").toLowerCase();
+      if (!/^[a-z][a-z0-9_]{2,23}$/.test(nickname)) return res.status(400).json({ message: "Ник: 3–24 символа, латиница, цифры и _, первая буква латинская" });
+      if (db.users.some(item => item.id !== user.id && item.nickname?.toLowerCase() === nickname)) return res.status(409).json({ message: "Этот ник уже занят" });
+      patch.nickname = nickname;
+    }
+    if ("telegramContact" in req.body) {
+      if (typeof req.body.telegramContact !== "string") return res.status(400).json({ message: "Введите Telegram username без ссылки" });
+      const contact = req.body.telegramContact.trim().replace(/^@/, "");
+      if (contact && !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(contact)) return res.status(400).json({ message: "Проверьте Telegram username: 5–32 символа, латиница, цифры и _" });
+      patch.telegramContact = contact;
+    }
+    if ("shareContact" in req.body) {
+      if (typeof req.body.shareContact !== "boolean") return res.status(400).json({ message: "Проверьте настройку контакта" });
+      patch.shareContact = req.body.shareContact;
+    }
     Object.assign(user, patch);
     await writeDatabase(db);
     res.json({ user });
   } catch (error) { next(error); }
 });
+installSocialRoutes(app, userIdFromRequest);
+
 app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegramConnectionStatus()); });
 
 function userIdFromRequest(req: express.Request): string {
   return String(resolvedUsers.get(req) ?? "");
 }
 
-function publicUser(user?: User) {
-  if (!user) return undefined;
-  const { id, name, age, ageGroup, avatarUrl, bio, district, sports, level, rating, reviewsCount } = user;
-  return { id, name, age, ageGroup, avatarUrl, bio, district, sports, level, rating, reviewsCount };
-}
+function publicUser(db: Awaited<ReturnType<typeof readDatabase>>, user?: User) { return publicProfile(db, user); }
 
 function participantsForActivity(db: Awaited<ReturnType<typeof readDatabase>>, activity: Activity) {
   const approvedUserIds = db.applications
@@ -155,7 +172,11 @@ app.get("/api/activities", async (req, res, next) => {
     const sport = String(req.query.sport ?? "").toLowerCase();
     const district = String(req.query.district ?? "").toLowerCase();
     const level = String(req.query.level ?? "");
+    const viewer = userIdFromRequest(req);
+    const friends = new Set((db.friendships ?? []).filter(item => item.status === "accepted" && (item.from === viewer || item.to === viewer)).map(item => item.from === viewer ? item.to : item.from));
     const activities = db.activities
+      .filter(item => req.query.friends !== "true" || friends.has(item.organizerId))
+      .filter(item => !req.query.category || (item.category ?? "sport") === req.query.category)
       .filter((item) => item.status !== "cancelled")
       .filter((item) => new Date(item.date).getTime() >= Date.now())
       .filter((item) => !sport || item.sport.toLowerCase() === sport)
@@ -163,10 +184,10 @@ app.get("/api/activities", async (req, res, next) => {
       .filter((item) => !level || item.level === level)
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((activity) => {
-        const { exactAddress: _hidden, ...item } = activity;
+        const item = visibleActivity(activity, false);
         return {
           ...item,
-          organizer: publicUser(db.users.find((user) => user.id === activity.organizerId)),
+          organizer: publicUser(db, db.users.find((user) => user.id === activity.organizerId)),
           participants: participantsForActivity(db, activity),
         };
       });
@@ -187,11 +208,10 @@ app.get("/api/activities/:id", async (req, res, next) => {
       (item) => item.activityId === activity.id && item.userId === userId && item.status === "approved",
     );
     const maySeeAddress = approved || activity.organizerId === userId;
-    const { exactAddress, ...publicActivity } = activity;
-    const visibleActivity = maySeeAddress ? activity : publicActivity;
+    const shownActivity = visibleActivity(activity, maySeeAddress);
     res.json({
-      ...visibleActivity,
-      organizer: publicUser(db.users.find((user) => user.id === activity.organizerId)),
+      ...shownActivity,
+      organizer: publicUser(db, db.users.find((user) => user.id === activity.organizerId)),
       participants: participantsForActivity(db, activity),
     });
   } catch (error) {
@@ -202,9 +222,23 @@ app.get("/api/activities/:id", async (req, res, next) => {
 app.post("/api/activities", async (req, res, next) => {
   try {
     const organizerId = userIdFromRequest(req);
-    const required = ["title", "sport", "date", "district", "publicPlace", "level", "capacity"];
+    const category = req.body.category ?? "sport";
+    const format = req.body.format ?? "offline";
+    if (!["sport", "games"].includes(category) || !["offline", "online"].includes(format)) return res.status(400).json({ message: "Проверьте категорию и формат" });
+    const required = ["title", "sport", "date", "level", "capacity", ...(format === "offline" ? ["district", "publicPlace"] : [])];
     const missing = required.filter((key) => !req.body[key]);
     if (missing.length) return res.status(400).json({ message: `Заполните поля: ${missing.join(", ")}` });
+    for (const [key, max] of [["title", 120], ["sport", 80], ["district", 100], ["publicPlace", 200], ["description", 2000], ["equipment", 300], ["exactAddress", 300], ["gamePlatform", 100]] as const) {
+      if (req.body[key] !== undefined && (typeof req.body[key] !== "string" || req.body[key].length > max)) return res.status(400).json({ message: "Проверьте поля сходки: слишком длинный текст" });
+    }
+    if (!String(req.body.title).trim() || !String(req.body.sport).trim()) return res.status(400).json({ message: "Заполните название и занятие" });
+    const capacity = Number(req.body.capacity), price = Number(req.body.price ?? 0);
+    if (!Number.isInteger(capacity) || capacity < 2 || capacity > 100 || !Number.isFinite(price) || price < 0 || price > 100000 || !["beginner", "any", "intermediate"].includes(req.body.level)) return res.status(400).json({ message: "Проверьте число участников (2–100), цену и уровень" });
+    let connectionLink: string | undefined;
+    if (req.body.connectionLink) {
+      try { const url = new URL(req.body.connectionLink); if (url.protocol !== "https:" || url.username || url.password || url.href.length > 2048) throw new Error(); connectionLink = url.href; }
+      catch { return res.status(400).json({ message: "Укажите корректную HTTPS-ссылку подключения" }); }
+    }
     const activityDate = new Date(String(req.body.date));
     if (Number.isNaN(activityDate.getTime())) {
       return res.status(400).json({ message: "Укажите корректную дату и время" });
@@ -237,15 +271,16 @@ app.post("/api/activities", async (req, res, next) => {
     const activity: Activity = {
       id: nanoid(),
       title: String(req.body.title),
-      sport: String(req.body.sport),
+      sport: String(req.body.sport).trim(),
+      category, format, connectionLink, gamePlatform: String(req.body.gamePlatform ?? ""),
       date: String(req.body.date),
-      district: String(req.body.district),
-      publicPlace: String(req.body.publicPlace),
-      exactAddress: String(req.body.exactAddress ?? req.body.publicPlace),
+      district: format === "online" ? "Онлайн" : String(req.body.district),
+      publicPlace: format === "online" ? "Из дома" : String(req.body.publicPlace),
+      exactAddress: format === "online" ? "" : String(req.body.exactAddress ?? req.body.publicPlace),
       level: req.body.level as SkillLevel,
-      capacity: Math.max(2, Number(req.body.capacity)),
+      capacity,
       approvedCount: 1,
-      price: Math.max(0, Number(req.body.price ?? 0)),
+      price,
       equipment: String(req.body.equipment ?? "Не требуется"),
       description: String(req.body.description ?? ""),
       ageGroup: ageLimitLabel(minAge, maxAge),
@@ -311,10 +346,10 @@ app.get("/api/users/:userId/activities", async (req, res, next) => {
         const applicationStatus = applications.find((item) => item.activityId === activity.id)?.status;
         const isOrganizer = activity.organizerId === req.params.userId;
         const maySeeAddress = isOrganizer || applicationStatus === "approved";
-        const { exactAddress, ...publicActivity } = activity;
+        const shownActivity = visibleActivity(activity, maySeeAddress);
         return {
-          ...(maySeeAddress ? activity : publicActivity),
-          organizer: publicUser(db.users.find((user) => user.id === activity.organizerId)),
+          ...shownActivity,
+          organizer: publicUser(db, db.users.find((user) => user.id === activity.organizerId)),
           participants: participantsForActivity(db, activity),
           relation: isOrganizer ? "organizer" : "participant",
           applicationStatus,
@@ -336,7 +371,7 @@ app.get("/api/organizers/:userId/applications", async (req, res, next) => {
       .map((application) => ({
         ...application,
         activity: db.activities.find((item) => item.id === application.activityId),
-        user: publicUser(db.users.find((item) => item.id === application.userId)),
+        user: publicUser(db, db.users.find((item) => item.id === application.userId)),
       }));
     res.json(results);
   } catch (error) {

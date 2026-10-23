@@ -1,0 +1,2 @@
+export const SPORT_OPTIONS = ["Бег", "Настольный теннис", "Большой теннис", "Волейбол", "Баскетбол", "Футбол", "Бадминтон", "Велосипед", "Плавание", "Фитнес", "Йога", "Скалолазание", "Падел", "Сквош", "Ролики", "Коньки", "Лыжи", "Шахматы", "Пешие прогулки"];
+export const GAME_OPTIONS = ["Counter-Strike 2", "Dota 2", "Valorant", "League of Legends", "Minecraft", "Fortnite", "Apex Legends", "Overwatch 2", "EA Sports FC", "Rocket League", "Genshin Impact"];

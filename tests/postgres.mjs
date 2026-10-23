@@ -42,10 +42,14 @@ const before = new PGlite(directory);
 const beforeStore = createPostgresStore(before);
 const saved = await beforeStore.read();
 saved.users.push({ id: "telegram:42", name: "Persistent", age: 19, ageGroup: "16+" });
+saved.friendships=[{id:"friend-test",from:"telegram:42",to:"max:77",status:"pending",createdAt:new Date().toISOString()}];
+saved.reviews=[{id:"review-test",activityId:"meeting",authorId:"max:77",targetId:"telegram:42",score:5,text:"Test",attended:true,createdAt:new Date().toISOString()}];
 await beforeStore.write(saved);
 await before.close();
 const after = new PGlite(directory);
 try {
   assert.equal((await createPostgresStore(after).read()).users[0].id, "telegram:42");
-  console.log("PASS: data survives database engine shutdown and reopen from disk");
+  const restored=await createPostgresStore(after).read();
+  assert.equal(restored.friendships[0].id,"friend-test"); assert.equal(restored.reviews[0].score,5);
+  console.log("PASS: social data persists; data survives database engine shutdown and reopen from disk");
 } finally { await after.close(); }

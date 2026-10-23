@@ -131,6 +131,7 @@ export function startMaxBot(): (() => void) | undefined {
 
   bot.on("bot_started", sendWelcome);
   bot.command("start", sendWelcome);
+  bot.command("support", async (ctx) => { await ctx.reply("«СХОДКА» бесплатна. Добровольная поддержка поможет нам развивать проект. Способ оплаты пока готовим."); });
   bot.command("help", async (ctx) => {
     await ctx.reply(
       "Команды:\n/start — открыть приветствие\n/help — показать справку",
@@ -145,6 +146,7 @@ export function startMaxBot(): (() => void) | undefined {
   void bot.api.setMyCommands([
     { name: "start", description: "Открыть Сходку" },
     { name: "help", description: "Помощь" },
+    { name: "support", description: "Поддержать проект" },
   ]).catch((error) => console.error("MAX bot commands setup failed", error));
 
   void bot.start({

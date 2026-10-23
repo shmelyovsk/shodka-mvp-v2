@@ -35,7 +35,7 @@ export function startTelegramBot(): (() => void) | undefined {
   const run = async () => {
     try {
       await telegram("setMyCommands", { commands: [
-        { command: "start", description: "Открыть Сходку" }, { command: "help", description: "Помощь" },
+        { command: "start", description: "Открыть Сходку" }, { command: "help", description: "Помощь" }, { command: "support", description: "Поддержать проект" },
       ] }, controller.signal);
     } catch { console.error("Не удалось настроить команды Telegram"); }
     while (!controller.signal.aborted) {
@@ -43,11 +43,15 @@ export function startTelegramBot(): (() => void) | undefined {
         const updates = await telegram<Update[]>("getUpdates", { offset, timeout: 25, allowed_updates: ["message"] }, controller.signal);
         for (const update of updates) {
           const message = update.message;
-          if (message?.chat.type === "private" && /^\/(start|help)(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
+          if (message?.chat.type === "private" && /^\/(start|help|support)(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
+            if (/^\/support(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
+              await telegram("sendMessage", { chat_id: message.chat.id, text: "«СХОДКА» бесплатна. Добровольная поддержка поможет нам оплачивать сервер и развивать приложение 💚\nСпособ оплаты пока готовим — никаких переводов сейчас делать не нужно." }, controller.signal);
+              offset = update.update_id + 1; continue;
+            }
             const url = process.env.MINI_APP_URL?.trim();
             await telegram("sendMessage", {
               chat_id: message.chat.id,
-              text: "Привет! Это «Сходка» 👋\nНайди компанию для спорта — от настольного тенниса до вечернего бега.\nПрисоединяйся к встрече или собирай свою.",
+              text: "Привет! Это «Сходка» 👋\nНайди компанию для спорта и игр — на площадке, в клубе или онлайн.\nПрисоединяйся к встрече или собирай свою.",
               ...(url?.startsWith("https://") ? { reply_markup: { inline_keyboard: [[{ text: "Найти сходку", web_app: { url } }]] } } : {}),
             }, controller.signal);
           }
