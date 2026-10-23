@@ -15,13 +15,17 @@ import type { Activity, SkillLevel, User } from "./types.js";
 import { installContactRoutes, syncTelegramContact, verifiedContact, CONTACT_REQUIRED } from "./contacts.js";
 import { installSupportRoutes } from "./support.js";
 
+import { installLifecycleRoutes, terminal, inFeed } from "./lifecycle.js";
+import { timingSafeEqual } from "node:crypto";
+import { startReminders, runReminders } from "./reminders.js";
+
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json({ limit: "600kb" }));
 const API_VERSION = 4;
-app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support","verifiedContacts"],release:"contacts-v4"}));
+app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support","verifiedContacts","meetupLifecycle"],release:"meetups-v4"}));
 app.use("/api",(_req,res,next)=>{res.setHeader("Cache-Control","no-store");next();});
 const resolvedUsers = new WeakMap<express.Request, string>();
 // Serialize API operations in this process; PostgreSQL versions also protect across processes.
@@ -57,7 +61,7 @@ app.use("/api", (req, res, next) => {
       const publicRead = req.method === "GET" && (
         /^\/activities(?:\/[^/]+)?$/.test(req.path) || /^\/(max|telegram)\/status$/.test(req.path));
       if (!publicRead && !userId) return void res.status(401).json({ message: "Откройте Сходку через бота MAX или Telegram" });
-      if (userId && req.method !== "GET" && req.path !== "/me") {
+      if (userId && req.method !== "GET" && req.path !== "/me" && !req.path.startsWith("/favorites") && req.path !== "/telegram-link") {
         const db = await readDatabase();
         const user = db.users.find(item => item.id === userId);
         if (!user || user.age < 16) return void res.status(403).json({ message: "Сначала укажите возраст в профиле (16+)" });
@@ -128,6 +132,7 @@ installModerationRoutes(app, userIdFromRequest);
 installSupportRoutes(app, userIdFromRequest);
 installContactRoutes(app, userIdFromRequest);
 installSocialRoutes(app, userIdFromRequest);
+installLifecycleRoutes(app, userIdFromRequest);
 
 app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegramConnectionStatus()); });
 
@@ -160,8 +165,14 @@ function ageLimitLabel(minAge?: number, maxAge?: number): string {
 }
 
 app.get("/health", async (_req, res) => {
-  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"contacts-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
+  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"meetups-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
   catch { res.status(503).json({ status: "unavailable", service: "shodka-api", storage: storageKind }); }
+});
+
+app.post("/internal/reminders",async(req,res)=>{
+ const secret=process.env.REMINDER_CRON_SECRET?.trim();if(!secret||secret.length<32)return void res.status(404).json({message:"Планировщик не настроен"});
+ const input=req.header("authorization")??"",expected="Bearer "+secret;const a=Buffer.from(input),b=Buffer.from(expected);if(a.length!==b.length||!timingSafeEqual(a,b))return void res.status(401).json({message:"Недостаточно прав"});
+ try{const sent=await runReminders(Date.now(),serializeBackground);res.json({ok:true,sent});}catch{res.status(503).json({message:"Повторите обработку позже"});}
 });
 
 app.get("/api/max/status", async (_req, res, next) => {
@@ -184,10 +195,12 @@ app.get("/api/activities", async (req, res, next) => {
       .filter(item => req.query.friends !== "true" || friends.has(item.organizerId))
       .filter(item => !req.query.category || (item.category ?? "sport") === req.query.category)
       .filter((item) => item.status !== "cancelled" && !item.moderationHidden && !db.users.find(user=>user.id===item.organizerId)?.suspended)
-      .filter((item) => new Date(item.date).getTime() >= Date.now())
+      .filter((item) => inFeed(item))
       .filter((item) => !sport || item.sport.toLowerCase() === sport)
       .filter((item) => !district || item.district.toLowerCase().includes(district))
       .filter((item) => !level || item.level === level)
+      .filter(item=>!req.query.format || (item.format??"offline")===req.query.format)
+      .filter(item=>req.query.free!=="true"||(item.status==="open"&&item.approvedCount<item.capacity&&Date.parse(item.date)>Date.now()))
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((activity) => {
         const item = visibleActivity(activity, false);
@@ -216,7 +229,9 @@ app.get("/api/activities/:id", async (req, res, next) => {
     const maySeeAddress = approved || activity.organizerId === userId;
     if ((activity.moderationHidden || db.users.find(user=>user.id===activity.organizerId)?.suspended) && !maySeeAddress && !isModerator(userId)) return res.status(404).json({message:"Сходка недоступна"});
     const shownActivity = visibleActivity(activity, maySeeAddress);
+    const ownApplication=db.applications.find(p=>p.activityId===activity.id&&p.userId===userId);
     res.json({
+      relation:activity.organizerId===userId?"organizer":ownApplication?"participant":undefined, applicationStatus:ownApplication?.status,
       ...shownActivity,
       organizer: publicUser(db, db.users.find((user) => user.id === activity.organizerId)),
       participants: participantsForActivity(db, activity),
@@ -328,16 +343,16 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
       return res.status(409).json({ message: `Для этой сходки установлен возраст до ${activity.maxAge} лет` });
     }
     const existing = db.applications.find((item) => item.activityId === activity.id && item.userId === userId);
-    if (existing) return res.status(409).json({ message: "Заявка уже отправлена" });
+    if (existing && existing.status !== "withdrawn") return res.status(409).json({ message: "Заявка уже отправлена" });
 
     const application = {
-      id: nanoid(),
+      id: existing?.id ?? nanoid(),
       activityId: activity.id,
       userId,
       status: "pending" as const,
       createdAt: new Date().toISOString(),
     };
-    db.applications.push(application);
+    if(existing)Object.assign(existing,application);else db.applications.push(application);
     await writeDatabase(db);
     await sendNotification({ userId: activity.organizerId, text: `Новая заявка на «${activity.title}»` });
     res.status(201).json(application);
@@ -402,7 +417,8 @@ app.patch("/api/applications/:id", async (req, res, next) => {
     if (!application) return res.status(404).json({ message: "Заявка не найдена" });
     const activity = db.activities.find((item) => item.id === application.activityId);
     if (!activity || activity.organizerId !== organizerId) return res.status(403).json({ message: "Недостаточно прав" });
-    if (activity.status === "cancelled" || new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка завершена или отменена" });
+    if(application.status==="withdrawn")return res.status(409).json({message:"Участник отозвал заявку. Дождитесь новой заявки"});
+    if (terminal(activity) || new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка завершена или отменена" });
     if(status==="approved"&&(!verifiedContact(db.users.find(u=>u.id===organizerId))||!verifiedContact(db.users.find(u=>u.id===application.userId))))return res.status(409).json({message:"Перед одобрением организатор и участник должны подтвердить Telegram-контакты в профиле"});
     if (status === "approved" && application.status !== "approved" && activity.approvedCount >= activity.capacity) {
       return res.status(409).json({ message: "Все места уже заняты" });
@@ -430,6 +446,8 @@ app.post("/api/activities/:id/cancel", async (req, res, next) => {
     const activity = db.activities.find((item) => item.id === req.params.id);
     if (!activity) return res.status(404).json({ message: "Активность не найдена" });
     if (activity.organizerId !== organizerId) return res.status(403).json({ message: "Недостаточно прав" });
+    if(terminal(activity))return res.status(409).json({message:"Встреча уже завершена или отменена"});
+    if(Date.parse(activity.date)<=Date.now())return res.status(409).json({message:"Встреча уже началась. Укажите её итог"});
     activity.status = "cancelled";
     await writeDatabase(db);
     await Promise.all(db.applications.filter(item => item.activityId === activity.id && item.status === "approved").map(item => sendNotification({ userId: item.userId, text: `Сходка «${activity.title}» отменена` })));
@@ -457,8 +475,11 @@ const server = app.listen(port, "0.0.0.0", () => {
 
 const stopMaxBot = startMaxBot();
 const stopTelegramBot = startTelegramBot();
+async function serializeBackground<T>(task:()=>Promise<T>):Promise<T>{const previous=operations;let release!:()=>void;operations=new Promise<void>(resolve=>{release=resolve;});await previous;try{return await task();}finally{release();}}
+const stopReminders = process.env.REMINDERS_ENABLED === "false" ? undefined : startReminders(serializeBackground);
 
 function shutdown() {
+  stopReminders?.();
   stopMaxBot?.();
   stopTelegramBot?.();
   server.close(() => { void closeDatabase().finally(() => process.exit(0)); });

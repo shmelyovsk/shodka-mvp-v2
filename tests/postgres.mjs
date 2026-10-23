@@ -46,6 +46,9 @@ saved.friendships=[{id:"friend-test",from:"telegram:42",to:"max:77",status:"pend
 saved.reviews=[{id:"review-test",activityId:"meeting",authorId:"max:77",targetId:"telegram:42",score:5,text:"Test",attended:true,createdAt:new Date().toISOString()}];
 saved.supportDrafts={"telegram:42":"idea"};
 saved.supportTickets=[{id:"support-test",userId:"telegram:42",kind:"problem",text:"Test screenshot",createdAt:new Date().toISOString(),status:"working",sourceMessageId:77,attachment:{kind:"photo",fileId:"private-file-id"},replies:[{id:"reply-test",text:"Answer",moderatorId:"telegram:1",createdAt:new Date().toISOString(),delivery:"sent"}]}];
+saved.favorites=[{userId:"telegram:42",activityId:"completed-test",createdAt:new Date().toISOString()}];
+saved.activities.push({id:"completed-test",organizerId:"telegram:42",status:"completed",date:new Date().toISOString(),endedAt:new Date().toISOString()});
+saved.reminderDeliveries=[{key:"completed-test:telegram:42:hour",activityId:"completed-test",userId:"telegram:42",window:"hour",state:"sent",claimedAt:new Date().toISOString(),attempts:1}];
 await beforeStore.write(saved);
 await before.close();
 const after = new PGlite(directory);
@@ -54,5 +57,6 @@ try {
   const restored=await createPostgresStore(after).read();
   assert.equal(restored.friendships[0].id,"friend-test"); assert.equal(restored.reviews[0].score,5);
   assert.equal(restored.supportDrafts["telegram:42"],"idea");assert.equal(restored.supportTickets[0].attachment.fileId,"private-file-id");assert.equal(restored.supportTickets[0].replies[0].delivery,"sent");
-  console.log("PASS: support tickets, drafts, attachments, replies and social data persist; data survives database engine shutdown and reopen from disk");
+  assert.equal(restored.favorites[0].activityId,"completed-test");assert.equal(restored.activities[0].status,"completed");assert.ok(restored.activities[0].endedAt);assert.equal(restored.reminderDeliveries[0].state,"sent");
+  console.log("PASS: favorites, meetup outcomes, reminder journal, support tickets, drafts, attachments, replies and social data persist; data survives database engine shutdown and reopen from disk");
 } finally { await after.close(); }

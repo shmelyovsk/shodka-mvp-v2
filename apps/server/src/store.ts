@@ -74,7 +74,11 @@ export async function writeDatabase(database: Database): Promise<void> {
     await fs.mkdir(path.dirname(dataFile), { recursive: true });
     const temporary = `${dataFile}.tmp`;
     await fs.writeFile(temporary, JSON.stringify(database, null, 2), "utf8");
-    await fs.rename(temporary, dataFile);
+    // Windows may briefly lock the destination while another reader or antivirus closes it.
+    for(let attempt=0;;attempt++){
+      try{await fs.rename(temporary,dataFile);break;}
+      catch(error){const code=(error as NodeJS.ErrnoException).code;if(process.platform!=="win32"||attempt>=5||!["EPERM","EACCES","EBUSY"].includes(code??""))throw error;await new Promise(resolve=>setTimeout(resolve,20*2**attempt));}
+    }
   });
   return writeQueue;
 }

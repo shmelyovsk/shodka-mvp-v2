@@ -10,15 +10,20 @@ import { NavIcon } from "./NavIcon";
 import { activityPhase, inHistoryTab, type HistoryTab } from "./history";
 import type { Activity, OrganizerApplication } from "./types";
 
-type Tab = "catalog" | "create" | "requests" | "mine" | "profile" | "friends" | "moderation" | "support";
+type Tab = "catalog" | "create" | "requests" | "mine" | "profile" | "friends" | "moderation" | "support" | "favorites";
 type DateFilter = "all" | "today" | "tomorrow" | "week";
 
+const FavoriteActions = createContext<{ids:Set<string>;toggle:(id:string)=>void}>({ids:new Set(),toggle:()=>{}});
+const terminal=(a:Activity)=>["cancelled","completed","not_held"].includes(a.status);
+const moscowDay=(date:Date)=>new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
+const outcomeLabel=(a:Activity)=>a.status==="completed"?"Состоялась":a.status==="not_held"?"Не состоялась":a.status==="cancelled"?"Отменена":activityPhase(a)==="past"?"Итог не указан":activityPhase(a)==="started"?"Уже началась":"";
 const ProfileOpener = createContext<(id: string) => void>(() => {});
 const levelNames = { beginner: "Начинающий", any: "Любой", intermediate: "Средний" };
 const applicationStatusNames = {
   pending: "Ожидает подтверждения",
   approved: "Вы участвуете",
   rejected: "Заявка отклонена",
+  withdrawn: "Вы отменили участие",
 };
 const dateFilterNames: Record<DateFilter, string> = {
   all: "Все даты",
@@ -35,15 +40,8 @@ function startOfDay(value: Date) {
 
 function matchesDateFilter(value: string, filter: DateFilter) {
   if (filter === "all") return true;
-  const activityDate = startOfDay(new Date(value));
-  const today = startOfDay(new Date());
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const weekEnd = new Date(today);
-  weekEnd.setDate(weekEnd.getDate() + 7);
-  if (filter === "today") return activityDate.getTime() === today.getTime();
-  if (filter === "tomorrow") return activityDate.getTime() === tomorrow.getTime();
-  return activityDate >= today && activityDate < weekEnd;
+  const day=moscowDay(new Date(value)),today=moscowDay(new Date()),tomorrow=moscowDay(new Date(Date.now()+86400000)),end=moscowDay(new Date(Date.now()+7*86400000));
+  return filter==="today"?day===today:filter==="tomorrow"?day===tomorrow:day>=today&&day<end;
 }
 
 function formatDate(value: string) {
@@ -115,13 +113,14 @@ function ParticipantList({ participants }: { participants?: Activity["participan
 
 function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => void }) {
   const openProfile = useContext(ProfileOpener);
+  const favorites=useContext(FavoriteActions);
   const free = activity.capacity - activity.approvedCount;
-  const phase = activityPhase(activity);
   return (
     <article className="activity-card" onClick={onOpen}>
       <div className="card-topline">
         <span className="sport-pill">{activity.sport}</span>
-        <span className={free <= 2 ? "places hot" : "places"}>{activity.moderationHidden ? "Скрыта модерацией" : phase === "cancelled" ? "Отменена" : phase === "past" ? "Время встречи прошло" : phase === "started" ? "Уже началась" : free > 0 ? `${free} мест` : "Набор закрыт"}</span>
+        <span className={free <= 2 ? "places hot" : "places"}>{activity.moderationHidden ? "Скрыта модерацией" : outcomeLabel(activity) || (free > 0 ? `${free} мест` : "Набор закрыт")}</span>
+        <button type="button" className="bookmark-button" aria-label={favorites.ids.has(activity.id)?"Убрать из избранного":"В избранное"} aria-pressed={favorites.ids.has(activity.id)} onClick={event=>{event.stopPropagation();favorites.toggle(activity.id);}}><svg width="22" height="22" viewBox="0 0 24 24" fill={favorites.ids.has(activity.id)?"currentColor":"none"} stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4V3Z"/></svg></button>
       </div>
       <h3><button className="card-title-button" onClick={event=>{event.stopPropagation();onOpen();}}>{activity.title}</button></h3>
       <p className="meta">{formatDate(activity.date)}</p>
@@ -149,6 +148,13 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
 }
 
 function App() {
+  const [favorites,setFavorites]=useState<Activity[]>([]);
+  const [favoriteBusy,setFavoriteBusy]=useState(false);
+  const [formatFilter,setFormatFilter]=useState("all");
+  const [freeOnly,setFreeOnly]=useState(false);
+  const [favoritesOnly,setFavoritesOnly]=useState(false);
+  const [shareUrl,setShareUrl]=useState("");
+  const [actionBusy,setActionBusy]=useState(false);
   const [moderator,setModerator]=useState(false);
   const [viewedUser, setViewedUser] = useState<string | null>(null);
   const [friendsOnly, setFriendsOnly] = useState(false);
@@ -213,6 +219,13 @@ function App() {
     }
   }
 
+  async function loadFavorites(){setFavorites(await api<Activity[]>("/api/favorites",{},currentUserId));}
+  useEffect(()=>{if(authReady&&profile)void loadFavorites().catch(e=>setMessage(e.message));},[authReady,currentUserId]);
+  useEffect(()=>{if(authReady&&profile){const id=new URLSearchParams(window.location.search).get("activity");if(id&&/^[A-Za-z0-9_-]{1,64}$/.test(id))void openActivity(id);}},[authReady,currentUserId]);
+  async function toggleFavorite(id:string){if(favoriteBusy)return;setFavoriteBusy(true);try{await api('/api/favorites/'+id,{method:favorites.some(a=>a.id===id)?"DELETE":"PUT"},currentUserId);await loadFavorites();}catch(e){setMessage(e instanceof Error?e.message:"Не удалось сохранить");}finally{setFavoriteBusy(false);}}
+  async function finishActivity(outcome:"completed"|"not_held"){if(!selected||actionBusy||!window.confirm(outcome==="completed"?"Встреча состоялась? После завершения участники смогут оставить отзывы.":"Отметить, что встреча не состоялась? Отзывы будут недоступны."))return;setActionBusy(true);try{await api('/api/activities/'+selected.id+'/finish',{method:"POST",body:JSON.stringify({outcome})},currentUserId);setSelected(null);setMessage(outcome==="completed"?"Сходка завершена. Отзывы доступны в профилях участников.":"Отмечено: сходка не состоялась");await Promise.all([loadMine(),loadActivities(false),loadFavorites()]);}catch(e){setMessage(e instanceof Error?e.message:"Не удалось завершить встречу");}finally{setActionBusy(false);}}
+  async function leaveActivity(){if(!selected||actionBusy)return;const soon=Date.parse(selected.date)-Date.now()<3600000;if(!window.confirm(selected.applicationStatus==="pending"?"Отозвать заявку? Организатор получит уведомление.":soon?"Встреча начнётся менее чем через час. Точно отменить участие? Организатор получит уведомление.":"Отменить участие? Организатор получит уведомление, а ваше место освободится."))return;setActionBusy(true);try{await api('/api/activities/'+selected.id+'/leave',{method:"POST"},currentUserId);setSelected(null);setMessage("Участие отменено");await Promise.all([loadMine(),loadActivities(false)]);}catch(e){setMessage(e instanceof Error?e.message:"Не удалось отменить участие");}finally{setActionBusy(false);}}
+  async function shareActivity(){if(!selected||actionBusy)return;setActionBusy(true);try{const {url}=await api<{url:string}>('/api/activities/'+selected.id+'/share',{},currentUserId);setShareUrl(url);if(navigator.share){try{await navigator.share({title:selected.title,url});}catch{/* The link remains available for manual copying. */}}else if(navigator.clipboard){await navigator.clipboard.writeText(url).catch(()=>{});}}catch(e){setMessage(e instanceof Error?e.message:"Не удалось получить ссылку");}finally{setActionBusy(false);}}
   async function loadMine() {
     const data = await api<Activity[]>(`/api/users/${currentUserId}/activities`, {}, currentUserId);
     setMine(data);
@@ -236,11 +249,11 @@ function App() {
     const matchesSport = sport === "Все" || item.sport === sport;
     const placeQuery = place.trim().toLocaleLowerCase("ru");
     const matchesPlace = !placeQuery || `${item.district} ${item.publicPlace}`.toLocaleLowerCase("ru").includes(placeQuery);
-    return (categoryFilter === "all" || (item.category??"sport") === categoryFilter) && new Date(item.date).getTime() > clock && matchesSport && matchesDateFilter(item.date, dateFilter) && matchesPlace;
+    return (categoryFilter === "all" || (item.category??"sport") === categoryFilter) && !terminal(item) && moscowDay(new Date(item.date)) >= moscowDay(new Date(clock)) && (formatFilter==="all"||(item.format??"offline")===formatFilter) && (!freeOnly||(item.status==="open"&&item.capacity>item.approvedCount&&Date.parse(item.date)>clock)) && (!favoritesOnly||favorites.some(f=>f.id===item.id)) && matchesSport && matchesDateFilter(item.date, dateFilter) && matchesPlace;
   });
   const displayedMine = mine.filter(item => inHistoryTab(item, historyTab, new Date(clock))).sort((a, b) => historyTab === "upcoming" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date));
   const reminders = mine
-    .filter((item) => item.status !== "cancelled" && (item.relation === "organizer" || item.applicationStatus === "approved"))
+    .filter((item) => !terminal(item) && (item.relation === "organizer" || item.applicationStatus === "approved"))
     .filter((item) => {
       const remaining = new Date(item.date).getTime() - Date.now();
       return remaining >= 0 && remaining <= 7 * 86_400_000;
@@ -249,6 +262,7 @@ function App() {
 
   async function openActivity(id: string) {
     try {
+      setShareUrl("");
       setSelected(await api<Activity>(`/api/activities/${id}`, {}, currentUserId));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка загрузки");
@@ -331,7 +345,7 @@ function App() {
   if (!profile) return <div className="app-shell welcome-shell"><section className="welcome-card"><span className="eyebrow">Москва · 16+</span><h1>Сходка</h1><p>{authError}</p><button className="primary" onClick={()=>window.location.reload()}>Повторить подключение</button><p>Откройте приложение из бота MAX или Telegram.</p><a href="https://t.me/skhodkaa_bot">Telegram</a> · <a href="https://max.ru/t221_hakaton_max_bot">MAX</a></section></div>;
 
   return (
-    <ProfileOpener.Provider value={setViewedUser}>
+    <ProfileOpener.Provider value={setViewedUser}><FavoriteActions.Provider value={{ids:new Set(favorites.map(a=>a.id)),toggle:id=>void toggleFavorite(id)}}>
     <div className="app-shell">
       <header className="site-header">
         {(tab === "profile" || tab === "moderation" || tab === "support") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва <span className="age-mark">· 16+</span></span>}
@@ -350,10 +364,11 @@ function App() {
         {(profile.moderationWarning||profile.suspended)&&<div className="notice" role="alert">{profile.suspended?"Ваш аккаунт ограничен модерацией. Публикации и заявки недоступны.":profile.moderationWarning}</div>}
         {tab === "support" && moderator && <SupportView currentUserId={currentUserId}/>}
         {tab === "moderation" && moderator && <ModerationView currentUserId={currentUserId} onChanged={()=>void loadActivities(false)}/>}
-        {(tab==="mine"||tab==="requests")&&<div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{applications.filter(item=>item.status==="pending"&&item.activity?.status!=="cancelled"&&new Date(item.activity?.date??0).getTime()>clock).length}</span></button></div>}
+        {(tab==="mine"||tab==="requests"||tab==="favorites")&&<div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{applications.filter(item=>item.status==="pending"&&item.activity&&!terminal(item.activity)&&new Date(item.activity?.date??0).getTime()>clock).length}</span></button><button className={tab==="favorites"?"active":""} onClick={()=>setTab("favorites")}>Избранное</button></div>}
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}
         {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} moderator={moderator} onSupport={()=>navigate("support")} onModeration={()=>navigate("moderation")} />}
 
+        {tab === "favorites" && <section><h2>Избранное</h2><p className="history-note">Сохранение не подаёт заявку. Завершённые и отменённые встречи остаются здесь, пока вы их не уберёте.</p><div className="activity-list">{favorites.map(a=><ActivityCard key={a.id} activity={a} onOpen={()=>void openActivity(a.id)}/>)}{!favorites.length&&<p className="empty">Сохраняйте встречи значком закладки.</p>}</div></section>}
         {tab === "friends" && <FriendsView key={viewedUser??"friends"} currentUserId={currentUserId} onProfile={setViewedUser}/>}
 
         {tab === "catalog" && (
@@ -382,6 +397,7 @@ function App() {
               <span className="filter-label">Где</span>
               <input value={place} onChange={(event) => setPlace(event.target.value)} placeholder="Район, метро или место" />
             </label>
+            <div className="catalog-extra-filters"><label>Формат<select value={formatFilter} onChange={e=>setFormatFilter(e.target.value)}><option value="all">Любой</option><option value="offline">Офлайн</option><option value="online">Онлайн</option></select></label><label className="friends-filter"><input type="checkbox" checked={freeOnly} onChange={e=>setFreeOnly(e.target.checked)}/>Есть свободные места</label><label className="friends-filter"><input type="checkbox" checked={favoritesOnly} onChange={e=>setFavoritesOnly(e.target.checked)}/>Только избранное</label><button className="text-button" onClick={()=>{setSport("Все");setDateFilter("all");setPlace("");setCategoryFilter("all");setFriendsOnly(false);setFormatFilter("all");setFreeOnly(false);setFavoritesOnly(false);}}>Сбросить фильтры</button></div>
             <section className="section-heading"><h2>Ближайшие сходки</h2><span>{visible.length}</span></section>
             {loading ? <p className="empty">Загружаем активности…</p> : (
               <div className="activity-list">
@@ -430,8 +446,8 @@ function App() {
               </div>
             )}
             <div className="section-heading"><h2>Мои сходки</h2><span>{displayedMine.length}</span></div>
-            <div className="history-tabs" role="group" aria-label="История сходок">{(["upcoming", "past", "cancelled"] as HistoryTab[]).map(item => <button key={item} aria-pressed={historyTab === item} className={historyTab === item ? "active" : ""} onClick={() => setHistoryTab(item)}>{{ upcoming: "Предстоящие", past: "Прошедшие", cancelled: "Отменённые" }[item]}</button>)}</div>
-            {historyTab === "past" && <p className="history-note">История встреч, а не подтверждение посещения. Начавшиеся сегодня остаются в «Предстоящих» до полуночи по Москве.</p>}
+            <div className="history-tabs" role="group" aria-label="История сходок">{(["upcoming", "past", "cancelled"] as HistoryTab[]).map(item => <button key={item} aria-pressed={historyTab === item} className={historyTab === item ? "active" : ""} onClick={() => setHistoryTab(item)}>{{ upcoming: "Предстоящие", past: "Прошедшие", cancelled: "Отменены / не состоялись" }[item]}</button>)}</div>
+            {historyTab === "past" && <p className="history-note">«Состоялась» — отметка организатора. Если итог не указан, встреча попадает сюда после полуночи по Москве.</p>}
             <div className="activity-list">
               {displayedMine.map((item) => <ActivityCard key={item.id} activity={item} onOpen={() => void openActivity(item.id)} />)}
               {!displayedMine.length && <p className="empty">Здесь пока нет сходок. Найдём компанию для спорта?</p>}
@@ -452,14 +468,14 @@ function App() {
                   </button>
                   <p className="meta">Хочет присоединиться к «{application.activity?.title ?? "сходке"}»</p>
                   <p className="meta">Возраст: {application.user?.age !== undefined ? `${application.user.age} лет` : "не указан"}</p>
-                  {application.status === "pending" && application.activity?.status !== "cancelled" && new Date(application.activity?.date ?? 0).getTime() > clock ? (
+                  {application.status === "pending" && application.activity && !terminal(application.activity) && new Date(application.activity?.date ?? 0).getTime() > clock ? (
                     <div className="request-actions">
                       <button className="secondary danger" onClick={() => void updateApplication(application.id, "rejected")}>Отклонить</button>
                       <button className="primary" onClick={() => void updateApplication(application.id, "approved")}>Принять</button>
                     </div>
                   ) : (
                     <span className={`relation-status ${application.status}`}>
-                      {application.status === "approved" ? "Участник принят" : application.status === "pending" ? "Встреча началась или отменена" : "Заявка отклонена"}
+                      {application.status === "approved" ? "Участник принят" : application.status === "pending" ? "Встреча началась или завершена" : application.status === "withdrawn" ? "Участник отозвал заявку" : "Заявка отклонена"}
                     </span>
                   )}
                 </article>
@@ -471,7 +487,7 @@ function App() {
       </main>
 
       <nav aria-label="Основная навигация">
-        {(["catalog", "create", "friends", "mine"] as const).map(item => <button key={item} aria-current={tab === item || item==="mine" && tab==="requests" ? "page" : undefined} className={tab === item || item==="mine" && tab==="requests" ? "active" : ""} onClick={() => navigate(item)}><span className="nav-icon"><NavIcon kind={item} /></span>{{ catalog: "Сходки", create: "Создать", friends: "Друзья", mine: "Мои" }[item]}</button>)}
+        {(["catalog", "create", "friends", "mine"] as const).map(item => <button key={item} aria-current={tab === item || item==="mine" && (tab==="requests"||tab==="favorites") ? "page" : undefined} className={tab === item || item==="mine" && (tab==="requests"||tab==="favorites") ? "active" : ""} onClick={() => navigate(item)}><span className="nav-icon"><NavIcon kind={item} /></span>{{ catalog: "Сходки", create: "Создать", friends: "Друзья", mine: "Мои" }[item]}</button>)}
       </nav>
 
       {selected && (
@@ -489,6 +505,9 @@ function App() {
             )}
             <ParticipantList participants={selected.participants} />
             {selected.organizer?.bio && <p className="modal-lead">Об организаторе: {selected.organizer.bio}</p>}
+            <p className="relation-status">{outcomeLabel(selected)}</p>
+            <div className="meetup-tools"><button className="secondary" disabled={favoriteBusy} onClick={()=>void toggleFavorite(selected.id)}>{favorites.some(a=>a.id===selected.id)?"Убрать из избранного":"В избранное"}</button><button className="secondary" disabled={actionBusy} onClick={()=>void shareActivity()}>Поделиться</button></div>
+            {shareUrl&&<label className="share-link">Ссылка на сходку<input readOnly value={shareUrl} onFocus={e=>e.target.select()}/><small>Скопируйте и отправьте другу. В боте он сможет открыть эту встречу.</small></label>}
             <dl>
               <div><dt>Когда</dt><dd>{formatDate(selected.date)}</dd></div>
               <div><dt>Формат</dt><dd>{selected.format==="online"?"Онлайн, из дома":selected.category==="games"?"Компьютерный клуб":"Личная встреча"}</dd></div>
@@ -507,14 +526,16 @@ function App() {
             {selected.organizerId === currentUserId && activityPhase(selected) === "upcoming" && (
               <button className="secondary danger full" onClick={() => void cancelActivity()}>Отменить сходку</button>
             )}
+            {selected.organizerId===currentUserId&&!terminal(selected)&&Date.parse(selected.date)<=clock&&<div className="finish-actions"><p>Как прошла встреча?</p><button className="primary full" disabled={actionBusy} onClick={()=>void finishActivity("completed")}>Завершить: состоялась</button><button className="secondary full" disabled={actionBusy} onClick={()=>void finishActivity("not_held")}>Не состоялась</button></div>}
+            {selected.organizerId!==currentUserId&&!terminal(selected)&&Date.parse(selected.date)>clock&&["approved","pending"].includes(selected.applicationStatus??"")&&<button className="secondary danger full" disabled={actionBusy} onClick={()=>void leaveActivity()}>{selected.applicationStatus==="pending"?"Отозвать заявку":"Отменить участие"}</button>}
             {selected.organizerId!==currentUserId&&<button className="text-button report-button" onClick={async()=>{const reason=window.prompt("Причина жалобы на сходку (до 500 символов)");if(!reason?.trim())return;try{await api("/api/reports",{method:"POST",body:JSON.stringify({kind:"activity",targetId:selected.id,reason})},currentUserId);setSelected(null);setMessage("Жалоба отправлена модераторам");}catch(error){setSelected(null);setMessage(error instanceof Error?error.message:"Не удалось отправить жалобу");}}}>Пожаловаться на сходку</button>}
-            {selected.organizerId !== currentUserId && <button className="primary full" disabled={selected.moderationHidden || selected.status !== "open" || new Date(selected.date).getTime() <= clock} onClick={() => void joinActivity()}>Подать заявку</button>}
+            {selected.organizerId !== currentUserId && <button className="primary full" disabled={actionBusy || selected.moderationHidden || selected.status !== "open" || new Date(selected.date).getTime() <= clock || ["pending","approved","rejected"].includes(selected.applicationStatus??"")} onClick={() => void joinActivity()}>{selected.applicationStatus==="approved"?"Вы участвуете":selected.applicationStatus==="pending"?"Заявка на рассмотрении":selected.applicationStatus==="rejected"?"Заявка отклонена":"Подать заявку"}</button>}
           </article>
         </div>
       )}
       {viewedUser&&<PublicProfileModal key={viewedUser} userId={viewedUser} currentUserId={currentUserId} onClose={()=>setViewedUser(null)} onActivity={id=>{setViewedUser(null);void openActivity(id);}}/>}
     </div>
-    </ProfileOpener.Provider>
+    </FavoriteActions.Provider></ProfileOpener.Provider>
   );
 }
 

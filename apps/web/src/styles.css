@@ -243,3 +243,7 @@ button.participant-chip { border:0; text-align:left; font:inherit; color:inherit
 .reported-content { padding:12px; background:#f3f6ef; border-radius:10px; white-space:pre-wrap; }
 .moderation-actions { display:flex; flex-wrap:wrap; gap:8px; padding-top:8px; }
 .moderation-actions button { font-size:12px; }
+
+.activity-card{position:relative}.bookmark-button{display:flex;align-items:center;justify-content:center;margin:0;flex-shrink:0;width:38px;height:38px;border:1px solid #dce4dc;border-radius:12px;background:transparent;color:#1b3327}.bookmark-button[aria-pressed=true]{background:#e2f3bf}.catalog-extra-filters{display:grid;gap:12px;margin:18px 0}.meetup-tools{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}.meetup-tools button{flex:1;min-width:130px}.finish-actions{display:grid;gap:10px;margin:18px 0}.share-link{display:grid;gap:8px;margin:14px 0}.share-link input{width:100%;min-width:0}.mine-sections{flex-wrap:wrap}.mine-sections button{min-height:44px}.catalog-extra-filters select{min-height:44px}
+
+.card-topline .sport-pill,.card-topline .places{min-width:0;overflow-wrap:anywhere}
