@@ -14,7 +14,7 @@ export function platformHeaders(): Record<string, string> {
 export interface Profile {
   id: string; name: string; age: number; avatarUrl?: string; platformAvatarUrl?: string;
   avatarSource?: "platform" | "custom"; bio?: string; district?: string; sports?: string[];
-  level?: "beginner" | "any" | "intermediate"; notificationsEnabled?: boolean;
+  level?: "beginner" | "any" | "intermediate"; notificationsEnabled?: boolean; nickname?: string; telegramContact?: string; shareContact?: boolean;
 }
 export const DEFAULT_USER_ID = "user-1";
 

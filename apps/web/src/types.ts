@@ -4,6 +4,10 @@ export interface Activity {
   sport: string;
   date: string;
   durationMinutes?: number;
+  category?: "sport" | "games";
+  format?: "offline" | "online";
+  connectionLink?: string;
+  gamePlatform?: string;
   district: string;
   publicPlace: string;
   exactAddress?: string;

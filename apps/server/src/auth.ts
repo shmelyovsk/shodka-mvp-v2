@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Request } from "express";
 
 export type Platform = "telegram" | "max";
-export interface Identity { id: string; name: string; platform: Platform; platformUserId: string; avatarUrl?: string }
+export interface Identity { id: string; name: string; platform: Platform; platformUserId: string; avatarUrl?: string; telegramContact?: string }
 
 export function validateInitData(platform: Platform, raw: string, token: string, now = Date.now()): Identity {
   if (!token || !raw || raw.length > 16000) throw new Error("Данные входа отсутствуют");
@@ -26,7 +26,7 @@ export function validateInitData(platform: Platform, raw: string, token: string,
     throw new Error("Некорректный профиль");
   }
   const avatarUrl = typeof user.photo_url === "string" && user.photo_url.startsWith("https://") && user.photo_url.length <= 2048 ? user.photo_url : undefined;
-  return { avatarUrl, id: `${platform}:${user.id}`, platform, platformUserId: String(user.id),
+  return { avatarUrl, telegramContact: platform === "telegram" && typeof user.username === "string" && /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(user.username) ? user.username : undefined, id: `${platform}:${user.id}`, platform, platformUserId: String(user.id),
     name: [user.first_name, typeof user.last_name === "string" ? user.last_name : ""].filter(Boolean).join(" ").slice(0, 120) };
 }
 

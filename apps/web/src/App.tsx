@@ -1,13 +1,17 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, DEFAULT_USER_ID, type Profile } from "./api";
+import { FriendsView } from "./FriendsView";
+import { PublicProfileModal } from "./PublicProfileModal";
+import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
 import { ProfileView } from "./ProfileView";
 import { NavIcon } from "./NavIcon";
 import { activityPhase, inHistoryTab, type HistoryTab } from "./history";
 import type { Activity, OrganizerApplication } from "./types";
 
-type Tab = "catalog" | "create" | "requests" | "mine" | "profile";
+type Tab = "catalog" | "create" | "requests" | "mine" | "profile" | "friends";
 type DateFilter = "all" | "today" | "tomorrow" | "week";
 
+const ProfileOpener = createContext<(id: string) => void>(() => {});
 const levelNames = { beginner: "Начинающий", any: "Любой", intermediate: "Средний" };
 const applicationStatusNames = {
   pending: "Ожидает подтверждения",
@@ -86,6 +90,7 @@ function RatingBadge({ rating, reviewsCount }: { rating?: number; reviewsCount?:
 }
 
 function ParticipantList({ participants }: { participants?: Activity["participants"] }) {
+  const openProfile = useContext(ProfileOpener);
   if (!participants?.length) return null;
   const visibleParticipants = participants.slice(0, 4);
   return (
@@ -93,10 +98,10 @@ function ParticipantList({ participants }: { participants?: Activity["participan
       <span className="participants-label">Участники</span>
       <div className="participant-list">
         {visibleParticipants.map((participant) => (
-          <span className="participant-chip" key={participant.id} title={`${participant.name}, ${participant.age} лет`}>
+          <button type="button" className="participant-chip" onClick={event=>{event.stopPropagation();openProfile(participant.id);}} key={participant.id} title={`${participant.name}, ${participant.age} лет`}>
             <PersonAvatar name={participant.name} avatarUrl={participant.avatarUrl} />
             <span><strong>{participant.name}</strong><small>{participant.age} лет</small></span>
-          </span>
+          </button>
         ))}
         {participants.length > visibleParticipants.length && (
           <span className="participant-more">+{participants.length - visibleParticipants.length}</span>
@@ -107,26 +112,27 @@ function ParticipantList({ participants }: { participants?: Activity["participan
 }
 
 function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => void }) {
+  const openProfile = useContext(ProfileOpener);
   const free = activity.capacity - activity.approvedCount;
   const phase = activityPhase(activity);
   return (
-    <button className="activity-card" onClick={onOpen}>
+    <article className="activity-card" onClick={onOpen}>
       <div className="card-topline">
         <span className="sport-pill">{activity.sport}</span>
         <span className={free <= 2 ? "places hot" : "places"}>{phase === "cancelled" ? "Отменена" : phase === "past" ? "Время встречи прошло" : phase === "started" ? "Уже началась" : free > 0 ? `${free} мест` : "Набор закрыт"}</span>
       </div>
-      <h3>{activity.title}</h3>
+      <h3><button className="card-title-button" onClick={event=>{event.stopPropagation();onOpen();}}>{activity.title}</button></h3>
       <p className="meta">{formatDate(activity.date)}</p>
       <p className="meta">{activity.district} · {activity.publicPlace}</p>
       {activity.organizer && (
-        <div className="organizer-inline">
+        <button className="organizer-inline profile-inline" onClick={event=>{event.stopPropagation();if(activity.organizer)openProfile(activity.organizer.id);}}>
           <PersonAvatar name={activity.organizer.name} avatarUrl={activity.organizer.avatarUrl} />
           <span>Организатор <strong>{activity.organizer.name}</strong><RatingBadge rating={activity.organizer.rating} reviewsCount={activity.organizer.reviewsCount} /></span>
-        </div>
+        </button>
       )}
       <ParticipantList participants={activity.participants} />
       <div className="card-footer">
-        <span>{levelNames[activity.level]} · {activity.ageGroup}</span>
+        <span>Уровень: {levelNames[activity.level].toLowerCase()}<br/>Возраст: {activity.ageGroup}{activity.minAge!==undefined&&activity.maxAge!==undefined?" лет":""}</span>
         <strong>{activity.price ? `${activity.price} ₽ с человека` : "Бесплатно"}</strong>
       </div>
       {activity.relation && (
@@ -136,11 +142,17 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
             : applicationStatusNames[activity.applicationStatus ?? "pending"]}
         </span>
       )}
-    </button>
+    </article>
   );
 }
 
 function App() {
+  const [viewedUser, setViewedUser] = useState<string | null>(null);
+  const [friendsOnly, setFriendsOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [createCategory, setCreateCategory] = useState<"sport"|"games">("sport");
+  const [createFormat, setCreateFormat] = useState<"offline"|"online">("offline");
+  const [chosenActivity, setChosenActivity] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [demo, setDemo] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -177,13 +189,13 @@ function App() {
   }
   function navigate(next: Tab) {
     if (next === "create" && !requireAge()) return;
-    setTab(next); setSelected(null); setMessage("");
+    setTab(next); setSelected(null); setViewedUser(null); setMessage("");
   }
 
   async function loadActivities(showLoading = true) {
     if (showLoading) setLoading(true);
     try {
-      const data = await api<Activity[]>("/api/activities");
+      const data = await api<Activity[]>(`/api/activities${friendsOnly?"?friends=true":""}`,{},currentUserId);
       setActivities(data);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка загрузки");
@@ -206,7 +218,7 @@ function App() {
     void loadActivities();
     const refreshTimer = window.setInterval(() => { setClock(Date.now()); void loadActivities(false); }, 60_000);
     return () => window.clearInterval(refreshTimer);
-  }, []);
+  }, [friendsOnly, currentUserId]);
   useEffect(() => { if (authReady && profile && (tab === "mine" || tab === "profile")) void loadMine().catch(error => setMessage(error.message)); }, [tab, currentUserId, authReady]);
   useEffect(() => { if (authReady && profile && tab === "requests") void loadApplications().catch(error => setMessage(error.message)); }, [tab, currentUserId]);
 
@@ -215,7 +227,7 @@ function App() {
     const matchesSport = sport === "Все" || item.sport === sport;
     const placeQuery = place.trim().toLocaleLowerCase("ru");
     const matchesPlace = !placeQuery || `${item.district} ${item.publicPlace}`.toLocaleLowerCase("ru").includes(placeQuery);
-    return new Date(item.date).getTime() > clock && matchesSport && matchesDateFilter(item.date, dateFilter) && matchesPlace;
+    return (categoryFilter === "all" || (item.category??"sport") === categoryFilter) && new Date(item.date).getTime() > clock && matchesSport && matchesDateFilter(item.date, dateFilter) && matchesPlace;
   });
   const displayedMine = mine.filter(item => inHistoryTab(item, historyTab, new Date(clock))).sort((a, b) => historyTab === "upcoming" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date));
   const reminders = mine
@@ -251,6 +263,8 @@ function App() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
+    if (payload.sport === "Другое") payload.sport = String(payload.customSport??"").trim();
+    delete payload.customSport;
     const localDate = new Date(String(payload.date));
     if (Number.isNaN(localDate.getTime())) {
       setMessage("Укажите корректную дату и время");
@@ -308,9 +322,10 @@ function App() {
   if (!profile) return <div className="app-shell welcome-shell"><section className="welcome-card"><span className="eyebrow">Москва · 16+</span><h1>Сходка</h1><p>{authError}</p><p>Откройте приложение из бота MAX или Telegram.</p><a href="https://t.me/skhodkaa_bot">Telegram</a> · <a href="https://max.ru/t221_hakaton_max_bot">MAX</a></section></div>;
 
   return (
+    <ProfileOpener.Provider value={setViewedUser}>
     <div className="app-shell">
       <header className="site-header">
-        {tab === "profile" ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва</span>}
+        {(tab === "profile" || tab === "friends") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва <span className="age-mark">· 16+</span></span>}
         <button className="profile-button" aria-label="Открыть личный кабинет" aria-current={tab === "profile" ? "page" : undefined} onClick={() => navigate("profile")}>
           <PersonAvatar name={demo ? (currentUserId === "user-1" ? "Ира" : "Саша") : profile.name} avatarUrl={demo ? undefined : profile.avatarUrl} size="large" />
         </button>
@@ -324,7 +339,9 @@ function App() {
 
       <main>
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}
-        {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} />}
+        {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} onFriends={()=>navigate("friends")} />}
+
+        {tab === "friends" && <FriendsView key={viewedUser??"friends"} currentUserId={currentUserId} onProfile={setViewedUser}/>}
 
         {tab === "catalog" && (
           <>
@@ -332,6 +349,8 @@ function App() {
               <img src="/shodka-court.webp" alt="Спортивная площадка «Сходка»" />
               <button className="primary hero-action" onClick={() => navigate("create")}>Создать сходку</button>
             </section>
+            <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все'],['sport','Спорт'],['games','Компьютерные игры']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} onClick={()=>{setCategoryFilter(value);setSport("Все");}}>{label}</button>)}</div>
+            <label className="friends-filter"><input type="checkbox" checked={friendsOnly} onChange={event=>setFriendsOnly(event.target.checked)}/> Организуют друзья</label>
             <div className="filter-group">
               <span className="filter-label">Когда</span>
               <div className="chips compact">
@@ -341,7 +360,7 @@ function App() {
               </div>
             </div>
             <div className="filter-group">
-              <span className="filter-label">Вид спорта</span>
+              <span className="filter-label">Занятие</span>
               <div className="chips compact">
                 {sports.map((item) => <button className={sport === item ? "chip active" : "chip"} onClick={() => setSport(item)} key={item}>{item}</button>)}
               </div>
@@ -365,11 +384,15 @@ function App() {
             <div className="section-heading"><h2>Новая сходка</h2></div>
             <form className="form" onSubmit={createActivity}>
               <label>Название<input required name="title" placeholder="Волейбол после пар" /></label>
-              <label>Вид спорта<select required name="sport" defaultValue=""><option value="" disabled>Выберите</option><option>Бег</option><option>Настольный теннис</option><option>Волейбол</option><option>Баскетбол</option><option>Футбол</option><option>Бадминтон</option><option>Велосипед</option></select></label>
+              <label>Категория<select name="category" value={createCategory} onChange={event=>{setCreateCategory(event.target.value as "sport"|"games");setChosenActivity("");}}><option value="sport">Спорт</option><option value="games">Компьютерные игры</option></select></label>
+              <label>Занятие<select required name="sport" value={chosenActivity} onChange={event=>setChosenActivity(event.target.value)}><option value="" disabled>Выберите</option>{(createCategory==="sport"?SPORT_OPTIONS:GAME_OPTIONS).map(item=><option key={item}>{item}</option>)}<option>Другое</option></select></label>
+              {chosenActivity==="Другое"&&<label>Какое занятие?<input required name="customSport" maxLength={80} placeholder="Напишите название спорта или игры"/></label>}
+              <label>Формат<select name="format" value={createFormat} onChange={event=>setCreateFormat(event.target.value as "offline"|"online")}><option value="offline">Личная встреча</option><option value="online">Онлайн, из дома</option></select></label>
+              {createCategory==="games"&&<label>Платформа / сервер / уровень<input name="gamePlatform" maxLength={100} placeholder="Например, ПК · Steam · любой ранг"/></label>}
               <label>Дата и время<input required type="datetime-local" name="date" min={minimumDateTime()} /></label>
-              <div className="form-row"><label>Район<input required name="district" placeholder="Сокол" /></label><label>Участников<input required type="number" min="2" max="30" name="capacity" defaultValue="4" /></label></div>
-              <label>Публичное место<input required name="publicPlace" placeholder="Спортивный центр рядом с метро" /></label>
-              <label>Точный адрес<input name="exactAddress" placeholder="Увидят только подтверждённые участники" /></label>
+              <div className="form-row">{createFormat==="offline"&&<label>Район<input required name="district" placeholder="Сокол" /></label>}<label>Участников<input required type="number" min="2" max="30" name="capacity" defaultValue="4" /></label></div>
+              {createFormat==="offline"&&<label>Публичное место<input required name="publicPlace" placeholder={createCategory==="games"?"Название компьютерного клуба":"Спортивный центр рядом с метро"} /></label>}
+              {createFormat==="offline"?<label>Точный адрес<input name="exactAddress" placeholder="Увидят только подтверждённые участники" /></label>:<label>Ссылка подключения<input name="connectionLink" type="url" maxLength={2048} placeholder="https://… (необязательно)"/><span className="form-hint">Ссылку увидят только принятые участники. Без ссылки договоритесь через организатора.</span></label>}
               <div className="form-row"><label>Уровень<select name="level" defaultValue="any"><option value="beginner">Начинающий</option><option value="any">Любой</option><option value="intermediate">Средний</option></select></label><label>С человека, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
               <div className="form-row"><label>Возраст от<input type="number" min="16" max="100" name="minAge" placeholder="Необязательно" /></label><label>Возраст до<input type="number" min="16" max="100" name="maxAge" placeholder="Необязательно" /></label></div>
               <p className="form-hint">Если поля пустые, присоединиться сможет любой пользователь 16+.</p>
@@ -410,10 +433,10 @@ function App() {
               {applications.map((application) => (
                 <article className="request-card" key={application.id}>
                   <span className="sport-pill">{application.activity?.sport ?? "Спорт"}</span>
-                  <div className="request-person">
+                  <button className="request-person profile-inline" onClick={()=>setViewedUser(application.userId)}>
                     <PersonAvatar name={application.user?.name ?? "Участник"} avatarUrl={application.user?.avatarUrl} size="large" />
                     <div><h3>{application.user?.name ?? "Участник"}</h3><RatingBadge rating={application.user?.rating} reviewsCount={application.user?.reviewsCount} /></div>
-                  </div>
+                  </button>
                   <p className="meta">Хочет присоединиться к «{application.activity?.title ?? "сходке"}»</p>
                   <p className="meta">Возраст: {application.user?.age !== undefined ? `${application.user.age} лет` : "не указан"}</p>
                   {application.status === "pending" && application.activity?.status !== "cancelled" && new Date(application.activity?.date ?? 0).getTime() > clock ? (
@@ -446,16 +469,19 @@ function App() {
             <h2>{selected.title}</h2>
             <p className="modal-lead">{selected.description}</p>
             {selected.organizer && (
-              <div className="organizer-profile">
+              <button className="organizer-profile profile-inline" onClick={()=>setViewedUser(selected.organizerId)}>
                 <PersonAvatar name={selected.organizer.name} avatarUrl={selected.organizer.avatarUrl} size="large" />
                 <div><span>Организатор</span><strong>{selected.organizer.name}</strong><RatingBadge rating={selected.organizer.rating} reviewsCount={selected.organizer.reviewsCount} /></div>
-              </div>
+              </button>
             )}
             <ParticipantList participants={selected.participants} />
             {selected.organizer?.bio && <p className="modal-lead">Об организаторе: {selected.organizer.bio}</p>}
             <dl>
               <div><dt>Когда</dt><dd>{formatDate(selected.date)}</dd></div>
-              <div><dt>Где</dt><dd>{selected.publicPlace}, {selected.district}</dd></div>
+              <div><dt>Формат</dt><dd>{selected.format==="online"?"Онлайн, из дома":"Личная встреча"}</dd></div>
+              <div><dt>Где</dt><dd>{selected.format==="online"?"Онлайн":`${selected.publicPlace}, ${selected.district}`}</dd></div>
+              {selected.gamePlatform&&<div><dt>Платформа</dt><dd>{selected.gamePlatform}</dd></div>}
+              {selected.connectionLink&&<div><dt>Подключение</dt><dd><a href={selected.connectionLink} target="_blank" rel="noreferrer">Открыть ссылку ↗</a></dd></div>}
               {selected.exactAddress && (
                 <div><dt>Точный адрес</dt><dd>{selected.exactAddress}</dd></div>
               )}
@@ -464,6 +490,7 @@ function App() {
               <div><dt>Инвентарь</dt><dd>{selected.equipment}</dd></div>
               <div><dt>Стоимость</dt><dd>{selected.price ? `${selected.price} ₽ с человека` : "Бесплатно"}</dd></div>
             </dl>
+            {selected.organizerId!==currentUserId&&<button className="secondary full contact-organizer" onClick={()=>setViewedUser(selected.organizerId)}>Профиль и контакт организатора</button>}
             {selected.organizerId === currentUserId && activityPhase(selected) === "upcoming" && (
               <button className="secondary danger full" onClick={() => void cancelActivity()}>Отменить сходку</button>
             )}
@@ -471,7 +498,9 @@ function App() {
           </article>
         </div>
       )}
+      {viewedUser&&<PublicProfileModal key={viewedUser} userId={viewedUser} currentUserId={currentUserId} onClose={()=>setViewedUser(null)} onActivity={id=>{setViewedUser(null);void openActivity(id);}}/>}
     </div>
+    </ProfileOpener.Provider>
   );
 }
 
