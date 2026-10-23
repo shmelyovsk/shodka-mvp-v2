@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
-import type { Profile } from "./api";
+import { api, type Profile } from "./api";
 
 export function ProfileView({ profile, organized, applications, onSave, onHistory, moderator, onModeration, onSupport }: {
   profile: Profile; organized: number; applications: number;
   onSave: (patch: Record<string, unknown>) => Promise<void>; onHistory: () => void; moderator:boolean; onModeration:()=>void; onSupport:()=>void;
 }) {
+  const [linkUrl,setLinkUrl]=useState("");
   const [nickname,setNickname]=useState(profile.nickname??"");
-  const [telegramContact,setTelegramContact]=useState(profile.telegramContact??"");
-  useEffect(()=>{setNickname(profile.nickname??"");setTelegramContact(profile.telegramContact??"");},[profile.nickname,profile.telegramContact]);
+  useEffect(()=>{setNickname(profile.nickname??"");},[profile.nickname]);
   const [photo, setPhoto] = useState(profile.avatarUrl);
   const [photoAction, setPhotoAction] = useState<"custom" | "platform" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,6 @@ export function ProfileView({ profile, organized, applications, onSave, onHistor
     const age = String(data.get("age") ?? "").trim();
     const patch: Record<string, unknown> = {
       ...(String(data.get("nickname")??"").trim() ? {nickname:data.get("nickname")} : {}),
-      telegramContact: data.get("telegramContact"), shareContact: data.get("shareContact") === "on",
       name: data.get("name"), bio: data.get("bio"), district: data.get("district"),
       sports: data.getAll("sports"), notificationsEnabled: data.get("notifications") === "on",
       ...(age ? { age: Number(age) } : {}),
@@ -64,8 +63,11 @@ export function ProfileView({ profile, organized, applications, onSave, onHistor
         <p className="form-hint">Возраст нужен перед первой заявкой или созданием сходки и виден другим участникам.</p>
         <label>О себе<textarea name="bio" rows={3} maxLength={500} placeholder="Что любите, как проводите время, какую компанию ищете" defaultValue={profile.bio} /></label>
         <fieldset className="sports-options"><legend>Интересы: спорт и игры (до 12)</legend>{[...SPORT_OPTIONS, ...GAME_OPTIONS, ...(profile.sports??[]).filter(item=>![...SPORT_OPTIONS,...GAME_OPTIONS].includes(item))].map(sport => <label key={sport}><input type="checkbox" name="sports" value={sport} defaultChecked={profile.sports?.includes(sport)} /><span>{sport}</span></label>)}</fieldset>
-        <label>Контакт в Telegram<input name="telegramContact" maxLength={33} value={telegramContact} onChange={event=>setTelegramContact(event.target.value)} autoComplete="off" placeholder="@username" autoCapitalize="none" spellCheck={false}/></label>
-        <label className="notification-toggle"><input type="checkbox" name="shareContact" defaultChecked={profile.shareContact===true}/><span>Показывать мой Telegram-контакт друзьям и после одобрения заявки<small>Контакт увидят друзья, а также организатор и принятый участник общей встречи. Для остальных он скрыт.</small></span></label>
+        <label>Контакт в Telegram<input value={profile.telegramContact?'@'+profile.telegramContact:'Не указан'} readOnly aria-readonly="true"/></label>
+        <p className="history-note">Контакт берётся из Telegram, изменить его здесь нельзя. Его увидят друзья, а после одобрения заявки — организатор и принятый участник друг у друга. Для остальных контакт скрыт.</p>
+        {!profile.telegramContact&&<p className="history-note">Установите имя пользователя @username в настройках Telegram и полностью переоткройте мини-приложение.</p>}
+        {profile.id.startsWith("max:")&&<><button type="button" className="secondary" disabled={busy} onClick={async()=>{setBusy(true);setMessage("");try{const result=await api<{url:string}>("/api/telegram-link",{method:"POST",body:"{}"},profile.id);setLinkUrl(result.url);setMessage("Откройте ссылку в Telegram и нажмите «Запустить». Ссылка действует 10 минут. После привязки нажмите «Обновить контакт».");}catch(e){setMessage(e instanceof Error?e.message:"Не удалось создать ссылку");}finally{setBusy(false);}}}>Привязать Telegram</button>{linkUrl&&<a className="secondary" href={linkUrl} target="_blank" rel="noopener noreferrer">Открыть Telegram для подтверждения</a>}<button type="button" className="text-button" onClick={()=>window.location.reload()}>Обновить контакт</button></>}
+
         <label className="notification-toggle"><input type="checkbox" name="notifications" defaultChecked={profile.notificationsEnabled !== false} /><span>Уведомления о заявках и изменениях встреч<small>Сообщения от бота в вашем мессенджере</small></span></label>
         <button className="primary full" type="submit">{busy ? "Сохраняем…" : "Сохранить профиль"}</button>
       </fieldset>

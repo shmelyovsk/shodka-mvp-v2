@@ -14,7 +14,7 @@ export function platformHeaders(): Record<string, string> {
 export interface Profile {
   id: string; name: string; age: number; avatarUrl?: string; platformAvatarUrl?: string;
   avatarSource?: "platform" | "custom"; bio?: string; district?: string; sports?: string[];
-  level?: "beginner" | "any" | "intermediate"; notificationsEnabled?: boolean; nickname?: string; telegramContact?: string; shareContact?: boolean; suspended?:boolean; moderationWarning?:string;
+  level?: "beginner" | "any" | "intermediate"; notificationsEnabled?: boolean; nickname?: string; telegramContact?: string; telegramOwnerId?:string; shareContact?: boolean; suspended?:boolean; moderationWarning?:string;
 }
 export const DEFAULT_USER_ID = "user-1";
 
@@ -27,7 +27,7 @@ export function verifyServer() {
     catch { throw new Error("Сервер недоступен или просыпается. Подождите немного и откройте приложение заново"); }
     if(!response.ok || !response.headers.get("content-type")?.includes("application/json"))throw new Error(VERSION_MESSAGE);
     const meta=await response.json().catch(()=>null);
-    if(!meta || meta.apiVersion !== 4)throw new Error(VERSION_MESSAGE);
+    if(!meta || meta.apiVersion !== 4 || !Array.isArray(meta.features) || !meta.features.includes("verifiedContacts"))throw new Error(VERSION_MESSAGE);
   })().catch(error=>{checkedServer=undefined;throw error;});
   return checkedServer;
 }

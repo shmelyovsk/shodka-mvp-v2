@@ -15,7 +15,7 @@ export function FriendsView({ currentUserId, onProfile }: {currentUserId: string
     finally { setBusy(false); }
   }
   return <section className="friends-page"><div className="section-heading"><h2>Друзья</h2></div>
-    <p className="history-note">После принятия запроса вы увидите контакты друг друга, если владелец разрешил их показывать в профиле.</p>
+    <p className="history-note">После принятия запроса вы увидите подтверждённые Telegram-контакты друг друга. Для остальных пользователей они скрыты.</p>
     <form className="friend-search" onSubmit={async event => {event.preventDefault();setBusy(true);setMessage("");try {const data=await api<PublicUser[]>(`/api/people?q=${encodeURIComponent(query)}`,{},currentUserId);setResults(data);if(!data.length)setMessage("По такому нику никого не нашли");}catch(error){setMessage(error instanceof Error?error.message:"Ошибка поиска");}finally{setBusy(false);}}}>
       <label htmlFor="nickname-search">Найти по нику СХОДКИ</label><div><input id="nickname-search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="@ira_sport" maxLength={25}/><button className="primary" disabled={busy}>Найти</button></div>
     </form>

@@ -14,7 +14,7 @@ const child = spawn(process.execPath, ['--import', 'data:text/javascript,' + enc
 let botOutput=''; child.stdout.on('data', data => botOutput += data);
 let logs=''; child.stderr.on('data', data => logs += data);
 function signed(platform,id,extra={}) {
-  const params=new URLSearchParams({auth_date:String(Math.floor(Date.now()/1000)),user:JSON.stringify({id,first_name:platform}),...extra});
+  const params=new URLSearchParams({auth_date:String(Math.floor(Date.now()/1000)),user:JSON.stringify({id,first_name:platform,...(platform==='telegram'?{username:id===123?'guest_name':'other_name'}:{})}),...extra});
   const secret=createHmac('sha256','WebAppData').update(platform+'-test').digest();
   const input=[...params].sort(([a],[b])=>a < b ? -1 : a > b ? 1 : 0).map(([k,v])=>`${k}=${v}`).join('\n');
   params.set('hash',createHmac('sha256',secret).update(input).digest('hex'));
@@ -35,7 +35,7 @@ try {
  assert.equal((await call('/api/users/telegram:123/activities',tg)).status,200, 'history is readable without age');
  assert.equal((await call('/api/activities',tg,'POST',{})).status,403, 'creating requires age');
  assert.equal((await call('/api/me',tg,'PATCH',{age:15})).status,400);
- const platformPhoto = signed('telegram',123,{user:JSON.stringify({id:123,first_name:'Telegram',photo_url:'https://example.com/avatar.jpg'})});
+ const platformPhoto = signed('telegram',123,{user:JSON.stringify({id:123,first_name:'Telegram',username:'guest_name',photo_url:'https://example.com/avatar.jpg'})});
  assert.equal((await call('/api/me',platformPhoto)).body.user.avatarUrl,'https://example.com/avatar.jpg');
  const photo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS8sAAAAASUVORK5CYII=';
  assert.equal((await call('/api/me',tg,'PATCH',{name:'Ира',bio:'Люблю бег',sports:['Бег'],district:'Сокол',avatarUrl:photo,notificationsEnabled:false})).status,200);
@@ -49,7 +49,9 @@ try {
  for(const headers of [max,tg]) assert.equal((await call('/api/me',headers,'PATCH',{age:20})).status,200);
  const outsider=signed('max',789);
  await call('/api/me',outsider);
- for (const [headers,patch] of [[max,{nickname:'host_max',telegramContact:'host_name',shareContact:true}],[tg,{nickname:'ira_guest',telegramContact:'guest_name',shareContact:true}],[outsider,{nickname:'outsider',age:20}]]) assert.equal((await call('/api/me',headers,'PATCH',patch)).status,200);
+ for (const [headers,patch] of [[max,{nickname:'host_max'}],[tg,{nickname:'ira_guest'}],[outsider,{nickname:'outsider',age:20}]]) assert.equal((await call('/api/me',headers,'PATCH',patch)).status,200);
+ // Fixture for an already verified MAX-to-Telegram link; the link flow is exercised separately.
+ const linkedFixture=JSON.parse(await readFile(dataFile,'utf8'));Object.assign(linkedFixture.users.find(u=>u.id==='max:123'),{telegramContact:'host_name',telegramOwnerId:'telegram:888',shareContact:false});await writeFile(dataFile,JSON.stringify(linkedFixture));
  assert.equal((await call('/api/me',tg,'PATCH',{nickname:'HOST_MAX'})).status,409,'nickname uniqueness is case insensitive');
  assert.equal((await call('/api/profiles/max:123',tg)).body.contact,null);
  const search=(await call('/api/people?q=host',tg)).body;
@@ -128,14 +130,17 @@ try {
  assert.equal((await call('/api/profiles/telegram:123',max)).body.user.reviewsCount,1);
  assert.equal((await call(`/api/reviews/${review.body.id}/report`,tg,'POST',{reason:'Хочу оспорить'})).status,201);
  assert.equal((await call(`/api/reviews/${review.body.id}/report`,tg,'POST',{reason:'Повтор'})).status,409);
- assert.equal((await call('/api/me',max,'PATCH',{shareContact:false})).status,200);
- assert.equal((await call('/api/profiles/max:123',tg)).body.contact,null,'owner can revoke contact visibility despite shared meeting');
+ assert.equal((await call('/api/me',max,'PATCH',{shareContact:false})).status,400,'sharing switch cannot override access rules');
+ assert.equal((await call('/api/profiles/max:123',tg)).body.contact.telegram,'host_name','old false sharing flag no longer blocks approved contacts');
  assert.equal((await call('/api/me',tg)).body.user.nickname,'ira_guest','nickname survives reload');
  const withUsername=signed('telegram',123,{user:JSON.stringify({id:123,first_name:'Telegram',username:'auto_name'})});
- await call('/api/me',tg,'PATCH',{telegramContact:''});
- assert.equal((await call('/api/me',withUsername)).body.user.telegramContact,'','intentionally cleared contact must not be reimported');
- await call('/api/me',tg,'PATCH',{telegramContact:'guest_name'});
- assert.equal((await call('/api/me',tg)).body.user.telegramContact,'guest_name','contact survives reload');
+ assert.equal((await call('/api/me',tg,'PATCH',{telegramContact:'someone_else'})).status,400,'contact edits rejected by server');
+ assert.equal((await call('/api/me',tg,'PATCH',{telegramOwnerId:'telegram:999'})).status,400,'ownership forgery rejected');
+ assert.equal((await call('/api/me',withUsername)).body.user.telegramContact,'auto_name','contact follows signed Telegram username');
+ const withoutUsername=signed('telegram',123,{user:JSON.stringify({id:123,first_name:'Telegram'})});
+ assert.equal((await call('/api/me',withoutUsername)).body.user.telegramContact,undefined,'removed username must not leave stale contact');
+ assert.equal((await call('/api/activities',withoutUsername,'POST',{})).status,400,'posting without contact is rejected');
+ assert.equal((await call('/api/me',tg)).body.user.telegramContact,'guest_name','contact restores from trusted Telegram identity');
  assert.equal((await call('/api/does-not-exist',tg)).status,404,'unknown routes return JSON');
  assert.equal((await call('/api/moderation',tg)).status,403);
  assert.equal((await call('/api/moderation',outsider)).status,200);

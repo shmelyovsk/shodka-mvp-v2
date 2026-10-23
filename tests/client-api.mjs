@@ -8,12 +8,13 @@ const json=value=>new Response(JSON.stringify(value),{headers:{'content-type':'a
 try{
  globalThis.fetch=async()=>new Response('<!DOCTYPE html><h1>Not found</h1>',{status:404,headers:{'content-type':'text/html'}});
  await assert.rejects((await client()).api('/api/me'),/сервер пока другой версии/);
+ globalThis.fetch=async()=>json({apiVersion:4});await assert.rejects((await client()).api('/api/me'),/сервер пока другой версии/);
  globalThis.fetch=async()=>json({apiVersion:3});await assert.rejects((await client()).api('/api/me'),/сервер пока другой версии/);
- globalThis.fetch=async url=>String(url).endsWith('capabilities')?json({apiVersion:4}):new Response('<html>error</html>',{status:502,headers:{'content-type':'text/html'}});
+ globalThis.fetch=async url=>String(url).endsWith('capabilities')?json({apiVersion:4,features:["verifiedContacts"]}):new Response('<html>error</html>',{status:502,headers:{'content-type':'text/html'}});
  await assert.rejects((await client()).api('/api/profiles/123'),/временно недоступен/);
- globalThis.fetch=async url=>String(url).endsWith('capabilities')?json({apiVersion:4}):json({user:{nickname:'ira',telegramContact:'ira_name'}});
+ globalThis.fetch=async url=>String(url).endsWith('capabilities')?json({apiVersion:4,features:["verifiedContacts"]}):json({user:{nickname:'ira',telegramContact:'ira_name'}});
  assert.equal((await (await client()).api('/api/me')).user.nickname,'ira');
- globalThis.fetch=async url=>String(url).endsWith('capabilities')?json({apiVersion:4}):new Response('{broken',{headers:{'content-type':'application/json'}});
+ globalThis.fetch=async url=>String(url).endsWith('capabilities')?json({apiVersion:4,features:["verifiedContacts"]}):new Response('{broken',{headers:{'content-type':'application/json'}});
  await assert.rejects((await client()).api('/api/friends'),/некорректный ответ/);
  console.log('PASS: API compatibility gate, friendly HTML/network responses, valid profile JSON');
 }finally{delete globalThis.window;}

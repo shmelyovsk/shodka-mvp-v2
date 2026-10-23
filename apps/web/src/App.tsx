@@ -181,7 +181,7 @@ function App() {
   }, []);
   async function saveProfile(patch: Record<string, unknown>) {
     const result = await api<{ user: Profile }>("/api/me", { method: "PATCH", body: JSON.stringify(patch) }, currentUserId);
-    for(const key of ["nickname","telegramContact"] as const) {
+    for(const key of ["nickname"] as const) {
       if(typeof patch[key]==="string") {
         const expected=(patch[key] as string).trim().replace(/^@/,"").toLowerCase();
         if((result.user[key]??"").toLowerCase()!==expected)throw new Error("Сервер не сохранил новые поля. Проверьте обновление сервера и попробуйте снова");

@@ -1,3 +1,4 @@
+import { verifiedContact } from "./contacts.js";
 import { checkContent, isModerator } from "./moderation.js";
 import type { Express } from "express";
 import { nanoid } from "nanoid";
@@ -23,7 +24,7 @@ export function approvedIn(db: Database, activity: Activity, userId: string) {
 export function canSeeContact(db: Database, viewer: string, target: User) {
   if (viewer === target.id) return true;
   if (target.suspended || db.users.find(user=>user.id===viewer)?.suspended) return false;
-  if (!target.shareContact) return false;
+  if (!verifiedContact(target)) return false;
   if (friendshipBetween(db, viewer, target.id)?.status === "accepted") return true;
   return db.activities.some(activity => activity.status !== "cancelled" && !activity.moderationHidden &&
     (activity.organizerId === viewer && approvedIn(db, activity, target.id) || activity.organizerId === target.id && approvedIn(db, activity, viewer)));

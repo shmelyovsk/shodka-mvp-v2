@@ -16,6 +16,7 @@ export interface User {
   notificationsEnabled?: boolean;
   nickname?: string;
   telegramContact?: string;
+  telegramOwnerId?: string;
   shareContact?: boolean;
   suspended?: boolean;
   moderationWarning?: string;
@@ -60,6 +61,7 @@ export interface Application {
 }
 
 export interface Database {
+  telegramLinks?: {hash:string;userId:string;expiresAt:string}[];
   supportTickets?: SupportTicket[];
   supportDrafts?: Record<string, "problem" | "idea">;
   users: User[];

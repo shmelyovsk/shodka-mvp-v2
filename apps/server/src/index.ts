@@ -12,6 +12,7 @@ import { StorageConflict } from "./postgres.js";
 import { installSocialRoutes, publicProfile, visibleActivity } from "./social.js";
 import type { Activity, SkillLevel, User } from "./types.js";
 
+import { installContactRoutes, syncTelegramContact, verifiedContact, CONTACT_REQUIRED } from "./contacts.js";
 import { installSupportRoutes } from "./support.js";
 
 const app = express();
@@ -20,7 +21,7 @@ const port = Number(process.env.PORT ?? 3000);
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json({ limit: "600kb" }));
 const API_VERSION = 4;
-app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support"],release:"support-v4"}));
+app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support","verifiedContacts"],release:"contacts-v4"}));
 app.use("/api",(_req,res,next)=>{res.setHeader("Cache-Control","no-store");next();});
 const resolvedUsers = new WeakMap<express.Request, string>();
 // Serialize API operations in this process; PostgreSQL versions also protect across processes.
@@ -45,13 +46,13 @@ app.use("/api", (req, res, next) => {
           let name=identity.name;try{checkContent(name);}catch(error){if(error instanceof ContentRejected)name="Участник";else throw error;}
           db.users.push({ id: identity.id, name, age: 0, ageGroup: "16+", avatarUrl: identity.avatarUrl, platformAvatarUrl: identity.avatarUrl, avatarSource: "platform", telegramContact: identity.telegramContact });
           await writeDatabase(db);
-        } else if (existing.platformAvatarUrl !== identity.avatarUrl || existing.telegramContact === undefined && identity.telegramContact) {
-          if (existing.telegramContact === undefined && identity.telegramContact) existing.telegramContact = identity.telegramContact;
+        } else if (existing.platformAvatarUrl !== identity.avatarUrl) {
           existing.platformAvatarUrl = identity.avatarUrl;
           if (existing.avatarSource !== "custom") { existing.avatarUrl = identity.avatarUrl; existing.avatarSource = "platform"; }
           await writeDatabase(db);
         }
       }
+      if(identity?.platform === "telegram") {const db=await readDatabase();if(syncTelegramContact(db,identity.id,identity.telegramContact))await writeDatabase(db);}
       if (userId) resolvedUsers.set(req, userId);
       const publicRead = req.method === "GET" && (
         /^\/activities(?:\/[^/]+)?$/.test(req.path) || /^\/(max|telegram)\/status$/.test(req.path));
@@ -73,7 +74,7 @@ app.get("/api/me", async (req, res, next) => {
   try {
     const db = await readDatabase();
     const user = db.users.find(item => item.id === userIdFromRequest(req));
-    res.json({ moderator:isModerator(userIdFromRequest(req)), user, demo: demoEnabled() && user?.id.startsWith("user-") });
+    res.json({ moderator:isModerator(userIdFromRequest(req)), user:user?{...user,telegramContact:verifiedContact(user)?user.telegramContact:undefined}:user, demo: demoEnabled() && user?.id.startsWith("user-") });
   } catch (error) { next(error); }
 });
 app.patch("/api/me", async (req, res, next) => {
@@ -116,24 +117,16 @@ app.patch("/api/me", async (req, res, next) => {
       if (db.users.some(item => item.id !== user.id && item.nickname?.toLowerCase() === nickname)) return res.status(409).json({ message: "Этот ник уже занят" });
       patch.nickname = nickname;
     }
-    if ("telegramContact" in req.body) {
-      if (typeof req.body.telegramContact !== "string") return res.status(400).json({ message: "Введите Telegram username без ссылки" });
-      const contact = req.body.telegramContact.trim().replace(/^@/, "");
-      if (contact && !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(contact)) return res.status(400).json({ message: "Проверьте Telegram username: 5–32 символа, латиница, цифры и _" });
-      patch.telegramContact = contact;
-    }
-    if ("shareContact" in req.body) {
-      if (typeof req.body.shareContact !== "boolean") return res.status(400).json({ message: "Проверьте настройку контакта" });
-      patch.shareContact = req.body.shareContact;
-    }
+    if ("telegramContact" in req.body || "shareContact" in req.body || "telegramOwnerId" in req.body) return res.status(400).json({message:"Telegram-контакт нельзя менять в СХОДКЕ. Измените @username в Telegram и откройте приложение заново"});
     checkContent(patch.name, patch.bio, patch.nickname, patch.district, ...(patch.sports??[]));
     Object.assign(user, patch);
     await writeDatabase(db);
-    res.json({ user });
+    res.json({ user:{...user,telegramContact:verifiedContact(user)?user.telegramContact:undefined} });
   } catch (error) { next(error); }
 });
 installModerationRoutes(app, userIdFromRequest);
 installSupportRoutes(app, userIdFromRequest);
+installContactRoutes(app, userIdFromRequest);
 installSocialRoutes(app, userIdFromRequest);
 
 app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegramConnectionStatus()); });
@@ -167,7 +160,7 @@ function ageLimitLabel(minAge?: number, maxAge?: number): string {
 }
 
 app.get("/health", async (_req, res) => {
-  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"support-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
+  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"contacts-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
   catch { res.status(503).json({ status: "unavailable", service: "shodka-api", storage: storageKind }); }
 });
 
@@ -236,6 +229,7 @@ app.get("/api/activities/:id", async (req, res, next) => {
 app.post("/api/activities", async (req, res, next) => {
   try {
     const organizerId = userIdFromRequest(req);
+    if(!verifiedContact((await readDatabase()).users.find(u=>u.id===organizerId)))return res.status(400).json({message:CONTACT_REQUIRED});
     const category = req.body.category ?? "sport";
     const format = req.body.format ?? "offline";
     if (!["sport", "games"].includes(category) || !["offline", "online"].includes(format)) return res.status(400).json({ message: "Проверьте категорию и формат" });
@@ -325,6 +319,8 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     if (activity.organizerId === userId) return res.status(409).json({ message: "Организатор уже участвует" });
     const user = db.users.find((item) => item.id === userId);
     if (!user) return res.status(404).json({ message: "Профиль пользователя не найден" });
+    if(!verifiedContact(user))return res.status(400).json({message:CONTACT_REQUIRED});
+    if(!verifiedContact(db.users.find(u=>u.id===activity.organizerId)))return res.status(409).json({message:"Организатору нужно подтвердить Telegram-контакт в профиле перед приёмом заявок"});
     if (activity.minAge !== undefined && user.age < activity.minAge) {
       return res.status(409).json({ message: `Для этой сходки установлен возраст от ${activity.minAge} лет` });
     }
@@ -407,6 +403,7 @@ app.patch("/api/applications/:id", async (req, res, next) => {
     const activity = db.activities.find((item) => item.id === application.activityId);
     if (!activity || activity.organizerId !== organizerId) return res.status(403).json({ message: "Недостаточно прав" });
     if (activity.status === "cancelled" || new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка завершена или отменена" });
+    if(status==="approved"&&(!verifiedContact(db.users.find(u=>u.id===organizerId))||!verifiedContact(db.users.find(u=>u.id===application.userId))))return res.status(409).json({message:"Перед одобрением организатор и участник должны подтвердить Telegram-контакты в профиле"});
     if (status === "approved" && application.status !== "approved" && activity.approvedCount >= activity.capacity) {
       return res.status(409).json({ message: "Все места уже заняты" });
     }
