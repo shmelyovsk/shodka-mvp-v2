@@ -54,7 +54,9 @@ export function startTelegramBot(): (() => void) | undefined {
               await telegram("sendMessage", { chat_id: message.chat.id, text: "«СХОДКА» бесплатна. Добровольная поддержка поможет нам оплачивать сервер и развивать приложение 💚\nСпособ оплаты пока готовим — никаких переводов сейчас делать не нужно." }, controller.signal);
               offset = update.update_id + 1; continue;
             }
-            const url = process.env.MINI_APP_URL?.trim();
+            let url = process.env.MINI_APP_URL?.trim();
+            const meeting=/^\/start(?:@\w+)?\s+meet_([A-Za-z0-9_-]{1,64})$/.exec(message.text??"");
+            if(meeting&&url?.startsWith("https://")){const linked=new URL(url);linked.searchParams.set("activity",meeting[1]);url=linked.toString();}
             await telegram("sendMessage", {
               chat_id: message.chat.id,
               text: "Привет! Это «Сходка» 👋\nНайди компанию для спорта и игр — на площадке, в клубе или онлайн.\nПрисоединяйся к встрече или собирай свою.",

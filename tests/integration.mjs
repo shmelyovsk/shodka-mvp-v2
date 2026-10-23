@@ -8,7 +8,7 @@ const dataFile = join(process.cwd(), `shodka-test-${randomUUID()}.json`);
 const mock = `const real = globalThis.fetch; globalThis.fetch = (url, options) => String(url).startsWith('https://') ? (String(url).includes('api.telegram.org') && String(url).endsWith('/sendMessage') && console.log('TELEGRAM_MESSAGE_SENT'), Promise.resolve(new Response(JSON.stringify({ok:true,result:[],user_id:1,first_name:'Bot',is_bot:true})))) : real(url,options);`;
 const child = spawn(process.execPath, ['--import', 'data:text/javascript,' + encodeURIComponent(mock), 'apps/server/dist/index.js'], {
   env: {...process.env, PORT:'3197', DATA_FILE:dataFile, NODE_ENV:'production', DEMO_MODE:'true', MODERATOR_USER_IDS:'max:789,telegram:456',
-    MAX_BOT_TOKEN:'max-test', TELEGRAM_BOT_TOKEN:'telegram-test', MAX_BOT_POLLING_ENABLED:'false', TELEGRAM_BOT_POLLING_ENABLED:'false'},
+    MAX_BOT_TOKEN:'max-test', TELEGRAM_BOT_TOKEN:'telegram-test', MAX_BOT_POLLING_ENABLED:'false', TELEGRAM_BOT_POLLING_ENABLED:'false', REMINDERS_ENABLED:'false'},
   stdio:['ignore','pipe','pipe'],
 });
 let botOutput=''; child.stdout.on('data', data => botOutput += data);
@@ -113,6 +113,7 @@ try {
  assert.equal((await call(`/api/activities/${online.body.id}`,outsider)).body.connectionLink,undefined);
  const db=JSON.parse(await readFile(dataFile,'utf8'));
  db.activities.find(item=>item.id===reverse.body.id).date=new Date(Date.now()-86400000*2).toISOString();
+ Object.assign(db.activities.find(item=>item.id===reverse.body.id),{status:'completed',endedAt:new Date(Date.now()-1000).toISOString()});
  await writeFile(dataFile,JSON.stringify(db));
  const history=(await call('/api/users/telegram:123/activities',tg)).body;
  assert.ok(history.some(item=>item.id===id && item.status==='cancelled'),'cancelled activity remains in history');

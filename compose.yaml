@@ -5,6 +5,8 @@ services:
       dockerfile: apps/server/Dockerfile
     environment:
       DATABASE_URL: ${DATABASE_URL:-}
+      REMINDER_CRON_SECRET: ${REMINDER_CRON_SECRET:-}
+      REMINDERS_ENABLED: ${REMINDERS_ENABLED:-true}
       MODERATOR_USER_IDS: ${MODERATOR_USER_IDS:-}
       NODE_ENV: production
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}

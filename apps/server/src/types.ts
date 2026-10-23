@@ -1,5 +1,5 @@
 export type SkillLevel = "beginner" | "any" | "intermediate";
-export type ApplicationStatus = "pending" | "approved" | "rejected";
+export type ApplicationStatus = "pending" | "approved" | "rejected" | "withdrawn";
 
 export interface User {
   id: string;
@@ -30,6 +30,7 @@ export interface Activity {
   sport: string;
   date: string;
   durationMinutes?: number;
+  endedAt?: string;
   category?: "sport" | "games";
   format?: "offline" | "online";
   connectionLink?: string;
@@ -48,7 +49,7 @@ export interface Activity {
   minAge?: number;
   maxAge?: number;
   organizerId: string;
-  status: "open" | "full" | "cancelled";
+  status: "open" | "full" | "cancelled" | "completed" | "not_held";
   createdAt: string;
 }
 
@@ -61,6 +62,8 @@ export interface Application {
 }
 
 export interface Database {
+  favorites?: {userId:string;activityId:string;createdAt:string}[];
+  reminderDeliveries?: {key:string;activityId:string;userId:string;window:"day"|"hour";state:"sending"|"sent"|"failed"|"skipped";claimedAt:string;attempts:number}[];
   telegramLinks?: {hash:string;userId:string;expiresAt:string}[];
   supportTickets?: SupportTicket[];
   supportDrafts?: Record<string, "problem" | "idea">;

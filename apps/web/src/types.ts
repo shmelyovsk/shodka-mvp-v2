@@ -4,6 +4,7 @@ export interface Activity {
   sport: string;
   date: string;
   durationMinutes?: number;
+  endedAt?: string;
   category?: "sport" | "games";
   format?: "offline" | "online";
   connectionLink?: string;
@@ -38,16 +39,16 @@ export interface Activity {
     age: number;
     avatarUrl?: string;
   }>;
-  status: "open" | "full" | "cancelled";
+  status: "open" | "full" | "cancelled" | "completed" | "not_held";
   relation?: "organizer" | "participant";
-  applicationStatus?: "pending" | "approved" | "rejected";
+  applicationStatus?: "pending" | "approved" | "rejected" | "withdrawn";
 }
 
 export interface OrganizerApplication {
   id: string;
   activityId: string;
   userId: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "withdrawn";
   createdAt: string;
   activity?: Activity;
   user?: {

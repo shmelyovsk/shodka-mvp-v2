@@ -1,3 +1,4 @@
+import { mayReview, terminal } from "./lifecycle.js";
 import { verifiedContact } from "./contacts.js";
 import { checkContent, isModerator } from "./moderation.js";
 import type { Express } from "express";
@@ -26,7 +27,7 @@ export function canSeeContact(db: Database, viewer: string, target: User) {
   if (target.suspended || db.users.find(user=>user.id===viewer)?.suspended) return false;
   if (!verifiedContact(target)) return false;
   if (friendshipBetween(db, viewer, target.id)?.status === "accepted") return true;
-  return db.activities.some(activity => activity.status !== "cancelled" && !activity.moderationHidden &&
+  return db.activities.some(activity => activity.status !== "cancelled" && activity.status !== "not_held" && !activity.moderationHidden &&
     (activity.organizerId === viewer && approvedIn(db, activity, target.id) || activity.organizerId === target.id && approvedIn(db, activity, viewer)));
 }
 export function visibleActivity(activity: Activity, allowed: boolean) {
@@ -84,15 +85,14 @@ export function installSocialRoutes(app: Express, currentUser: (req: import("exp
       const relation = friendshipBetween(db, viewer, user.id);
       const allReviews = (db.reviews ?? []).filter(item => item.targetId === user.id);
       const reviews = allReviews.filter(item=>!item.hidden).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      const eligibleActivities = db.activities.filter(activity => activity.status !== "cancelled" &&
-        Date.now() >= new Date(activity.date).getTime() + 24 * 60 * 60 * 1000 &&
+      const eligibleActivities = db.activities.filter(activity => mayReview(activity) &&
         viewer !== user.id && approvedIn(db, activity, viewer) && approvedIn(db, activity, user.id) &&
         !allReviews.some(review => review.authorId === viewer && review.activityId === activity.id))
         .map(activity => ({ id: activity.id, title: activity.title, date: activity.date }));
       res.json({ user: publicProfile(db, user),
         contact: canSeeContact(db, viewer, user) && user.telegramContact ? { telegram: user.telegramContact } : null,
         friendship: relation ? { id: relation.id, status: relation.status, incoming: relation.to === viewer } : null,
-        activities: db.activities.filter(activity => activity.organizerId === user.id && activity.status !== "cancelled" && new Date(activity.date).getTime() > Date.now()).sort((a,b) => a.date.localeCompare(b.date)).map(activity => visibleActivity(activity, false)),
+        activities: db.activities.filter(activity => activity.organizerId === user.id && !terminal(activity) && new Date(activity.date).getTime() > Date.now()).sort((a,b) => a.date.localeCompare(b.date)).map(activity => visibleActivity(activity, false)),
         reviews: reviews.slice(0, 50).map(review => ({ ...review, author: publicProfile(db, db.users.find(item => item.id === review.authorId)) })),
         eligibleActivities,
       });
@@ -102,8 +102,8 @@ export function installSocialRoutes(app: Express, currentUser: (req: import("exp
     try {
       const db = await readDatabase(); const viewer = currentUser(req);
       const activity = db.activities.find(item => item.id === req.body.activityId); const target = String(req.body.userId ?? "");
-      if (!activity || activity.status === "cancelled" || viewer === target || !approvedIn(db, activity, viewer) || !approvedIn(db, activity, target)) return res.status(403).json({ message: "Отзыв доступен только участникам общей подтверждённой встречи" });
-      if (Date.now() < new Date(activity.date).getTime() + 86400000) return res.status(409).json({ message: "Отзыв можно оставить через сутки после начала" });
+      if (!activity || activity.status === "cancelled" || activity.status === "not_held" || viewer === target || !approvedIn(db, activity, viewer) || !approvedIn(db, activity, target)) return res.status(403).json({ message: "Отзыв доступен только участникам общей подтверждённой встречи" });
+      if (!mayReview(activity)) return res.status(409).json({ message: "Отзыв можно оставить после того, как организатор отметит встречу состоявшейся" });
       if (req.body.attended !== true) return res.status(400).json({ message: "Подтвердите, что вы встретились" });
       const score = Number(req.body.score); const text = req.body.text ?? "";
       if (!Number.isInteger(score) || score < 1 || score > 5 || typeof text !== "string" || text.length > 500) return res.status(400).json({ message: "Оценка от 1 до 5, текст до 500 символов" });

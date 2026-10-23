@@ -13,4 +13,6 @@ assert.equal(inHistoryTab(meeting,'upcoming',new Date('2026-10-23T11:00:00Z')),t
 assert.equal(inHistoryTab(meeting,'past',new Date('2026-10-24T10:00:00Z')),true);
 assert.equal(inHistoryTab({...meeting,status:'cancelled'},'cancelled'),true);
 assert.equal(inHistoryTab({...meeting,status:'cancelled'},'upcoming'),false);
+assert.equal(activityPhase({...meeting,status:'completed',endedAt:'2026-10-23T11:00:00Z'},new Date('2026-10-23T12:00:00Z')),'past');
+assert.equal(inHistoryTab({...meeting,status:'not_held'},'cancelled'),true);
 console.log('PASS: archive boundaries, meetings starting today, Moscow midnight, cancelled meetings');
