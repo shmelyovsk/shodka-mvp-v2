@@ -26,9 +26,9 @@ export function FriendsView({ currentUserId, onProfile }: {currentUserId: string
       const list=friends.filter(item=>group==="accepted"?item.status==="accepted":item.status==="pending"&&item.incoming===(group==="incoming"));
       return <section key={group} className="friend-group"><h3>{{incoming:"Входящие запросы",accepted:"Мои друзья",outgoing:"Отправленные запросы"}[group]} <span>{list.length}</span></h3>
         {!list.length&&<p className="history-note">Здесь пока никого нет.</p>}
-        {list.map(friend=><article className="friend-item" key={friend.id}><button className="person-row" onClick={()=>onProfile(friend.user.id)}>{friend.user.avatarUrl&&<img src={friend.user.avatarUrl} alt=""/>}<span><strong>{friend.user.name}</strong><small>@{friend.user.nickname}</small></span></button><div className="friend-actions">
+        {list.map(friend=><article className={`friend-item${group==="accepted"?" friend-item-accepted":""}`} key={friend.id}><button className="person-row" onClick={()=>onProfile(friend.user.id)}>{friend.user.avatarUrl?<img src={friend.user.avatarUrl} alt=""/>:<div className="friend-avatar" aria-hidden="true">{friend.user.name.trim().charAt(0).toUpperCase()}</div>}<span><strong>{friend.user.name}</strong><small>@{friend.user.nickname}</small></span></button><div className="friend-actions">
           {group==="incoming"&&<button disabled={busy} className="primary" onClick={()=>void act(friend.id,"PATCH")}>Принять</button>}
-          <button disabled={busy} className="text-button" onClick={()=>{if(group!=="accepted"||window.confirm("Удалить из друзей? Доступ к контактам по дружбе будет закрыт."))void act(friend.id,"DELETE");}}>{group==="accepted"?"Удалить из друзей":group==="incoming"?"Отклонить":"Отменить запрос"}</button>
+          <button disabled={busy} className={group==="accepted"?"friend-remove":"text-button"} aria-label={group==="accepted"?`Удалить ${friend.user.name} из друзей`:undefined} onClick={()=>{if(group!=="accepted"||window.confirm("Удалить из друзей? Доступ к контактам по дружбе будет закрыт."))void act(friend.id,"DELETE");}}>{group==="accepted"?"Удалить":group==="incoming"?"Отклонить":"Отменить запрос"}</button>
         </div></article>)}
       </section>;
     })}
