@@ -15,3 +15,13 @@
 @media(min-width:650px){body{padding:24px 0}.app-shell{min-height:calc(100svh - 48px);border-radius:14px;box-shadow:0 15px 60px #29262415}.app-shell>nav{bottom:24px;border-radius:0 0 14px 14px}.modal-backdrop{align-items:center;padding:20px}.modal{border-bottom:var(--line);border-radius:26px;max-height:90svh;box-shadow:var(--shadow)}}
 @media(max-width:360px){.app-shell>main{padding:0 16px}.site-header{padding:20px 16px 16px}.schedule-event{grid-template-columns:64px minmax(0,1fr);gap:10px}.time-column{width:64px;min-width:64px}.event-body{padding:12px}.event-body h3{font-size:19px}.event-attendance .avatar-stack{display:none}.intro-panel{padding:20px}.intro-panel h1{font-size:30px}.form-row{grid-template-columns:1fr}.wizard-steps li{font-size:10px;gap:4px}.profile-identity{gap:12px}.profile-identity h1{font-size:27px}.account-photo{width:64px;height:64px}.person-avatar.large{width:42px;height:42px}.brand-lockup{gap:5px 10px}.wordmark{font-size:22px}.city-label{font-size:11px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* Compact accepted friends: profile on the left, a separate quiet action on the right. */
+.friend-item-accepted{display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px}
+.friend-item-accepted>.person-row{flex:1;min-width:0;padding:3px 0}
+.friend-item-accepted .person-row strong{font-size:14px;line-height:1.4}
+.friend-item-accepted .person-row small{margin-top:3px;overflow-wrap:anywhere;line-height:1.4}
+.friend-item-accepted .friend-actions{flex-shrink:0;margin:0}
+.friend-remove{min-height:44px;padding:8px 10px;border:var(--line);border-radius:14px;background:transparent;font-size:11px;line-height:1.4}
+.friend-remove:hover:not(:disabled){background:var(--blue)}
+.friend-avatar{display:grid;place-items:center;width:42px;height:42px;flex-shrink:0;border:var(--line);border-radius:50%;background:var(--blue);font-size:17px;font-weight:700}
