@@ -16,7 +16,7 @@ let stop;
 try{
  const {startTelegramBot}=await import('../apps/server/dist/telegram.js');stop=startTelegramBot();
  for(let attempt=0;attempt<50&&messages.length<2;attempt++)await new Promise(resolve=>setTimeout(resolve,10));
- assert.ok(commands.some(item=>item.command==='id'));assert.ok(commands.some(item=>item.command==='support'));
+ assert.ok(commands.some(item=>item.command==='idea'));assert.ok(commands.some(item=>item.command==='cancel'));assert.ok(commands.some(item=>item.command==='help'));assert.ok(commands.some(item=>item.command==='id'));assert.ok(commands.some(item=>item.command==='support'));
  assert.ok(messages.some(text=>text.includes('telegram:123')));assert.ok(messages.some(text=>text.includes('Способ оплаты пока готовим')));
  console.log('PASS: /id and /support registration and replies (mock Telegram API)');
 }finally{

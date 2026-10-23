@@ -44,6 +44,8 @@ const saved = await beforeStore.read();
 saved.users.push({ id: "telegram:42", name: "Persistent", age: 19, ageGroup: "16+" });
 saved.friendships=[{id:"friend-test",from:"telegram:42",to:"max:77",status:"pending",createdAt:new Date().toISOString()}];
 saved.reviews=[{id:"review-test",activityId:"meeting",authorId:"max:77",targetId:"telegram:42",score:5,text:"Test",attended:true,createdAt:new Date().toISOString()}];
+saved.supportDrafts={"telegram:42":"idea"};
+saved.supportTickets=[{id:"support-test",userId:"telegram:42",kind:"problem",text:"Test screenshot",createdAt:new Date().toISOString(),status:"working",sourceMessageId:77,attachment:{kind:"photo",fileId:"private-file-id"},replies:[{id:"reply-test",text:"Answer",moderatorId:"telegram:1",createdAt:new Date().toISOString(),delivery:"sent"}]}];
 await beforeStore.write(saved);
 await before.close();
 const after = new PGlite(directory);
@@ -51,5 +53,6 @@ try {
   assert.equal((await createPostgresStore(after).read()).users[0].id, "telegram:42");
   const restored=await createPostgresStore(after).read();
   assert.equal(restored.friendships[0].id,"friend-test"); assert.equal(restored.reviews[0].score,5);
-  console.log("PASS: social data persists; data survives database engine shutdown and reopen from disk");
+  assert.equal(restored.supportDrafts["telegram:42"],"idea");assert.equal(restored.supportTickets[0].attachment.fileId,"private-file-id");assert.equal(restored.supportTickets[0].replies[0].delivery,"sent");
+  console.log("PASS: support tickets, drafts, attachments, replies and social data persist; data survives database engine shutdown and reopen from disk");
 } finally { await after.close(); }

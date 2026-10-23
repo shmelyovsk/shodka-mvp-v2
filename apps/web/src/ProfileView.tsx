@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
 import type { Profile } from "./api";
 
-export function ProfileView({ profile, organized, applications, onSave, onHistory, moderator, onModeration }: {
+export function ProfileView({ profile, organized, applications, onSave, onHistory, moderator, onModeration, onSupport }: {
   profile: Profile; organized: number; applications: number;
-  onSave: (patch: Record<string, unknown>) => Promise<void>; onHistory: () => void; moderator:boolean; onModeration:()=>void;
+  onSave: (patch: Record<string, unknown>) => Promise<void>; onHistory: () => void; moderator:boolean; onModeration:()=>void; onSupport:()=>void;
 }) {
   const [nickname,setNickname]=useState(profile.nickname??"");
   const [telegramContact,setTelegramContact]=useState(profile.telegramContact??"");
@@ -72,6 +72,7 @@ export function ProfileView({ profile, organized, applications, onSave, onHistor
       {message && <p className="account-feedback" role="status">{message}</p>}
     </form>
     <section className="account-history"><h2>Ваша история</h2><div className="account-stats"><div><strong>{organized}</strong><span>Организовано</span></div><div><strong>{applications}</strong><span>Заявок на встречи</span></div></div><button className="secondary full" onClick={onHistory}>Посмотреть мои сходки</button><p className="account-caption">Заявка не подтверждает фактическое посещение встречи.</p></section>
+    {moderator&&<button className="secondary full friends-entry" onClick={onSupport}>Обращения: проблемы и идеи →</button>}
     {moderator&&<button className="secondary full friends-entry" onClick={onModeration}>Модерация и жалобы →</button>}
 
   </section>;

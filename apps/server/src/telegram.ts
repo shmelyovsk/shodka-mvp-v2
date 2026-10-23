@@ -1,6 +1,7 @@
 import "./config.js";
+import { handleSupportMessage, type SupportMessage } from "./support.js";
 
-async function telegram<T>(method: string, payload: object, signal?: AbortSignal): Promise<T> {
+export async function telegram<T>(method: string, payload: object, signal?: AbortSignal): Promise<T> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token) throw new Error("Telegram не настроен");
   const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -26,7 +27,7 @@ export async function getTelegramConnectionStatus() {
   } catch { return { configured, connected: false }; }
 }
 
-interface Update { update_id: number; message?: { text?: string; chat: { id: number; type: string } } }
+interface Update { update_id: number; message?: SupportMessage }
 
 export function startTelegramBot(): (() => void) | undefined {
   if (!process.env.TELEGRAM_BOT_TOKEN?.trim() || process.env.TELEGRAM_BOT_POLLING_ENABLED !== "true") return;
@@ -35,7 +36,7 @@ export function startTelegramBot(): (() => void) | undefined {
   const run = async () => {
     try {
       await telegram("setMyCommands", { commands: [
-        { command: "start", description: "Открыть Сходку" }, { command: "help", description: "Помощь" }, { command: "support", description: "Поддержать проект" }, {command:"id",description:"Мой ID для поддержки"},
+        { command: "start", description: "Открыть Сходку" }, { command: "help", description: "Помощь" }, { command: "idea", description: "Предложить улучшение" }, { command: "cancel", description: "Отменить обращение" }, { command: "support", description: "Поддержать проект" }, {command:"id",description:"Мой ID для поддержки"},
       ] }, controller.signal);
     } catch { console.error("Не удалось настроить команды Telegram"); }
     while (!controller.signal.aborted) {
@@ -43,6 +44,7 @@ export function startTelegramBot(): (() => void) | undefined {
         const updates = await telegram<Update[]>("getUpdates", { offset, timeout: 25, allowed_updates: ["message"] }, controller.signal);
         for (const update of updates) {
           const message = update.message;
+          if(message?.chat.type === "private" && await handleSupportMessage(message)){offset=update.update_id+1;continue;}
           if (message?.chat.type === "private" && /^\/(start|help|support|id)(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
             if (/^\/id(?:@\w+)?(?:\s|$)/.test(message.text??"")) {await telegram("sendMessage",{chat_id:message.chat.id,text:`Ваш ID СХОДКИ: telegram:${message.chat.id}`},controller.signal);offset=update.update_id+1;continue;}
             if (/^\/support(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
