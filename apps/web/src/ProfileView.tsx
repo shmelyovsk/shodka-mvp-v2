@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
+import { Icon } from "./Icon";
 import { api, type Profile } from "./api";
 
 export function ProfileView({ profile, organized, applications, onSave, onHistory, moderator, onModeration, onSupport }: {
   profile: Profile; organized: number; applications: number;
   onSave: (patch: Record<string, unknown>) => Promise<void>; onHistory: () => void; moderator:boolean; onModeration:()=>void; onSupport:()=>void;
 }) {
+  const [editing,setEditing]=useState(false);
   const [linkUrl,setLinkUrl]=useState("");
   const [nickname,setNickname]=useState(profile.nickname??"");
   useEffect(()=>{setNickname(profile.nickname??"");},[profile.nickname]);
@@ -42,17 +44,18 @@ export function ProfileView({ profile, organized, applications, onSave, onHistor
       ...(photoAction === "custom" ? { avatarUrl: photo } : photoAction === "platform" ? { usePlatformAvatar: true } : {}),
     };
     setBusy(true); setMessage("");
-    try { await onSave(patch); setMessage("Профиль сохранён"); setPhotoAction(null); }
+    try { await onSave(patch); setMessage("Профиль сохранён"); setPhotoAction(null); setEditing(false); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Не удалось сохранить профиль"); }
     finally { setBusy(false); }
   }
   return <section className="account-page">
-    <div className="account-heading"><span className="eyebrow">Это вы</span><h1>Мой профиль</h1><p>Знакомиться проще, когда немного знаешь друг о друге.</p></div>
-    <form className="form account-form" onSubmit={submit}>
+    <div className="account-heading"><div className="profile-toolbar"><span className="eyebrow">Мой профиль</span>{!editing&&<button type="button" className="edit-profile-button" onClick={()=>{setMessage("");setEditing(true);}}><Icon name="pencil" size={17}/>Изменить</button>}</div>{editing&&<><h1>Немного<br/>о тебе.</h1><p>Пусть знакомиться будет проще.</p></>}</div>
+    {!editing&&<div className="profile-overview"><section className="profile-hero"><div className="profile-identity">{profile.avatarUrl?<img className="account-photo" src={profile.avatarUrl} alt="Твоё фото"/>:<span className="account-photo account-initial">{profile.name.slice(0,1)}</span>}<div><h1>{profile.name}</h1><p>{profile.nickname?'@'+profile.nickname:'Ник пока не выбран'}</p></div></div><div className="profile-facts"><span>{profile.age?profile.age+' лет':'Возраст не указан'}</span><span><Icon name="map-pin" size={17}/>{profile.district||'Район не указан'}</span></div></section><section className="profile-section"><h2>О себе</h2><p>{profile.bio||'Расскажи, чем любишь заниматься и какую компанию ищешь.'}</p></section><section className="profile-section"><h2>Что мне интересно</h2><div className="public-interests">{profile.sports?.length?profile.sports.map(sport=><span className="interest-tag" key={sport}>{sport}</span>):<p>Добавь интересы — так проще найти своих.</p>}</div></section><section className="profile-contact"><h2><Icon name="send" size={20}/>Telegram{profile.telegramContact?' · @'+profile.telegramContact:''}</h2><p>{profile.telegramContact?'Контакт видят друзья после принятия запроса, а также организатор и участник после одобрения заявки.':'Контакт пока не указан. Открой редактирование профиля, чтобы узнать, как его подтвердить.'}</p></section>{message&&<p className="account-feedback" role="status">{message}</p>}</div>}
+    {editing&&<form className="form account-form" onSubmit={submit}>
       <fieldset disabled={busy || readingPhoto} className="account-fields">
         <div className="account-photo-row">
           {photo ? <img className="account-photo" src={photo} alt="Ваше фото" /> : <span className="account-photo account-initial">{profile.name.slice(0, 1)}</span>}
-          <div><button type="button" className="secondary" onClick={() => fileInput.current?.click()}>{readingPhoto ? "Обрабатываем…" : "Выбрать фото"}</button><p className="account-caption">JPG, PNG или WebP</p>
+          <div><button type="button" className="secondary" onClick={() => fileInput.current?.click()}>{readingPhoto ? "Обрабатываем…" : "Выбрать фото"}</button><p className="account-caption">JPG, PNG или WebP · до 10 МБ</p>
             {profile.platformAvatarUrl && <button type="button" className="text-button" onClick={() => { setPhoto(profile.platformAvatarUrl); setPhotoAction("platform"); }}>Фото из мессенджера</button>}
           </div>
           <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={event => { void selectPhoto(event.target.files?.[0]); event.target.value = ""; }} />
@@ -70,12 +73,13 @@ export function ProfileView({ profile, organized, applications, onSave, onHistor
 
         <label className="notification-toggle"><input type="checkbox" name="notifications" defaultChecked={profile.notificationsEnabled !== false} /><span>Уведомления о заявках и изменениях встреч<small>Сообщения от бота в вашем мессенджере</small></span></label>
         <button className="primary full" type="submit">{busy ? "Сохраняем…" : "Сохранить профиль"}</button>
+      <button type="button" className="text-button cancel-edit" disabled={busy} onClick={()=>{setEditing(false);setNickname(profile.nickname??"");setPhoto(profile.avatarUrl);setPhotoAction(null);setMessage("");}}>Отменить изменения</button>
       </fieldset>
       {message && <p className="account-feedback" role="status">{message}</p>}
-    </form>
-    <section className="account-history"><h2>Ваша история</h2><div className="account-stats"><div><strong>{organized}</strong><span>Организовано</span></div><div><strong>{applications}</strong><span>Заявок на встречи</span></div></div><button className="secondary full" onClick={onHistory}>Посмотреть мои сходки</button><p className="account-caption">Заявка не подтверждает фактическое посещение встречи.</p></section>
-    {moderator&&<button className="secondary full friends-entry" onClick={onSupport}>Обращения: проблемы и идеи →</button>}
-    {moderator&&<button className="secondary full friends-entry" onClick={onModeration}>Модерация и жалобы →</button>}
+    </form>}
+    {!editing&&<section className="account-history"><h2>Ваша история</h2><div className="account-stats"><div><strong>{organized}</strong><span>Организовано</span></div><div><strong>{applications}</strong><span>Заявок на встречи</span></div></div><button className="secondary full" onClick={onHistory}>Посмотреть мои сходки</button><p className="account-caption">Заявка не подтверждает фактическое посещение встречи.</p></section>}
+    {!editing&&moderator&&<button className="secondary full friends-entry" onClick={onSupport}>Обращения: проблемы и идеи →</button>}
+    {!editing&&moderator&&<button className="secondary full friends-entry" onClick={onModeration}>Модерация и жалобы →</button>}
 
   </section>;
 }
