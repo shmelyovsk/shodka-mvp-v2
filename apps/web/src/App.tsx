@@ -18,7 +18,7 @@ const terminal=(a:Activity)=>["cancelled","completed","not_held"].includes(a.sta
 const moscowDay=(date:Date)=>new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
 const outcomeLabel=(a:Activity)=>a.status==="completed"?"Состоялась":a.status==="not_held"?"Не состоялась":a.status==="cancelled"?"Отменена":activityPhase(a)==="past"?"Итог не указан":activityPhase(a)==="started"?"Уже началась":"";
 const ProfileOpener = createContext<(id: string) => void>(() => {});
-const levelNames = { beginner: "Начинающий", any: "Любой", intermediate: "Средний" };
+const levelNames = { beginner: "Новичков", any: "Участников любого уровня", intermediate: "Участников с опытом" };
 const applicationStatusNames = {
   pending: "Ожидает подтверждения",
   approved: "Вы участвуете",
@@ -133,7 +133,7 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
       )}
       <ParticipantList participants={activity.participants} />
       <div className="card-footer">
-        <span>Уровень: {levelNames[activity.level].toLowerCase()}<br/>Возраст: {activity.ageGroup}{activity.minAge!==undefined&&activity.maxAge!==undefined?" лет":""}</span>
+        <span>Кого ждём: {levelNames[activity.level].toLowerCase()}<br/>Возраст: {activity.ageGroup}{activity.minAge!==undefined&&activity.maxAge!==undefined?" лет":""}</span>
         <strong>{activity.price ? `${activity.price} ₽ с человека` : "Бесплатно"}</strong>
       </div>
       {activity.relation && (
@@ -242,8 +242,9 @@ function App() {
     return () => window.clearInterval(refreshTimer);
   }, [friendsOnly, currentUserId]);
   useEffect(() => { if (authReady && profile && (tab === "mine" || tab === "profile")) void loadMine().catch(error => setMessage(error.message)); }, [tab, currentUserId, authReady]);
-  useEffect(() => { if (authReady && profile && (tab === "requests" || tab === "mine")) void loadApplications().catch(error => setMessage(error.message)); }, [tab, currentUserId]);
+  useEffect(() => { if (!authReady || !profile || (tab !== "requests" && tab !== "mine")) return; const refresh=()=>void loadApplications().catch(error=>setMessage(error.message));refresh();const timer=window.setInterval(refresh,60000);return()=>window.clearInterval(timer); }, [tab, currentUserId, authReady]);
 
+  const activeApplications=applications.filter(p=>p.status==="pending"&&p.activity&&!terminal(p.activity)&&!p.activity.moderationHidden&&Date.parse(p.activity.date)>clock);
   const sports = useMemo(() => ["Все", ...Array.from(new Set(activities.map((item) => item.sport)))], [activities]);
   const visible = activities.filter((item) => {
     const matchesSport = sport === "Все" || item.sport === sport;
@@ -364,7 +365,7 @@ function App() {
         {(profile.moderationWarning||profile.suspended)&&<div className="notice" role="alert">{profile.suspended?"Ваш аккаунт ограничен модерацией. Публикации и заявки недоступны.":profile.moderationWarning}</div>}
         {tab === "support" && moderator && <SupportView currentUserId={currentUserId}/>}
         {tab === "moderation" && moderator && <ModerationView currentUserId={currentUserId} onChanged={()=>void loadActivities(false)}/>}
-        {(tab==="mine"||tab==="requests"||tab==="favorites")&&<div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{applications.filter(item=>item.status==="pending"&&item.activity&&!terminal(item.activity)&&new Date(item.activity?.date??0).getTime()>clock).length}</span></button><button className={tab==="favorites"?"active":""} onClick={()=>setTab("favorites")}>Избранное</button></div>}
+        {(tab==="mine"||tab==="requests"||tab==="favorites")&&<div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{activeApplications.length}</span></button><button className={tab==="favorites"?"active":""} onClick={()=>setTab("favorites")}>Избранное</button></div>}
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}
         {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} moderator={moderator} onSupport={()=>navigate("support")} onModeration={()=>navigate("moderation")} />}
 
@@ -422,7 +423,7 @@ function App() {
               <div className="form-row">{createFormat==="offline"&&<label>Район<input required name="district" placeholder="Сокол" /></label>}<label>Участников<input required type="number" min="2" max="30" name="capacity" defaultValue="4" /></label></div>
               {createFormat==="offline"&&<label>Публичное место<input required name="publicPlace" placeholder={createCategory==="games"?"Название компьютерного клуба":"Спортивный центр рядом с метро"} /></label>}
               {createFormat==="offline"?<label>Точный адрес<input name="exactAddress" placeholder="Увидят только подтверждённые участники" /></label>:<label>Ссылка подключения<input name="connectionLink" type="url" maxLength={2048} placeholder="https://… (необязательно)"/><span className="form-hint">Ссылку увидят только принятые участники. Без ссылки договоритесь через организатора.</span></label>}
-              <div className="form-row"><label>Уровень<select name="level" defaultValue="any"><option value="beginner">Начинающий</option><option value="any">Любой</option><option value="intermediate">Средний</option></select></label><label>С человека, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
+              <div className="form-row"><label>Кого ждём<select name="level" defaultValue="any"><option value="beginner">Новичков</option><option value="any">Любой уровень</option><option value="intermediate">С опытом</option></select></label><label>С человека, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
               <div className="form-row"><label>Возраст от<input type="number" min="16" max="100" name="minAge" placeholder="Необязательно" /></label><label>Возраст до<input type="number" min="16" max="100" name="maxAge" placeholder="Необязательно" /></label></div>
               <p className="form-hint">Если поля пустые, присоединиться сможет любой пользователь 16+.</p>
               {createCategory!=="games"&&<label>Инвентарь<input name="equipment" placeholder="Мяч уже есть" /></label>}
@@ -457,9 +458,9 @@ function App() {
 
         {tab === "requests" && (
           <section>
-            <div className="section-heading"><h2>Заявки ко мне</h2><span>{applications.length}</span></div>
+            <div className="section-heading"><h2>Заявки ко мне</h2><span>{activeApplications.length}</span></div>
             <div className="request-list">
-              {applications.map((application) => (
+              {activeApplications.map((application) => (
                 <article className="request-card" key={application.id}>
                   <span className="sport-pill">{application.activity?.sport ?? "Спорт"}</span>
                   <button className="request-person profile-inline" onClick={()=>setViewedUser(application.userId)}>
@@ -480,7 +481,7 @@ function App() {
                   )}
                 </article>
               ))}
-              {!applications.length && <p className="empty">На ваши сходки пока нет заявок.</p>}
+              {!activeApplications.length && <p className="empty">Нет заявок, ожидающих решения. Принятые участники находятся в карточках ваших сходок.</p>}
             </div>
           </section>
         )}
@@ -517,7 +518,7 @@ function App() {
               {selected.exactAddress && (
                 <div><dt>Точный адрес</dt><dd>{selected.exactAddress}</dd></div>
               )}
-              <div><dt>Уровень</dt><dd>{levelNames[selected.level]}</dd></div>
+              <div><dt>Кого ждём</dt><dd>{levelNames[selected.level]}</dd></div>
               <div><dt>Возраст</dt><dd>{selected.ageGroup}</dd></div>
               {selected.category!=="games"&&<div><dt>Инвентарь</dt><dd>{selected.equipment||"Не требуется"}</dd></div>}
               <div><dt>Стоимость</dt><dd>{selected.price ? `${selected.price} ₽ с человека` : "Бесплатно"}</dd></div>
