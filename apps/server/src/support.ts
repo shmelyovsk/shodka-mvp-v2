@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { readDatabase, writeDatabase } from "./store.js";
 import { isModerator } from "./moderation.js";
 import { telegram } from "./telegram.js";
-export interface SupportMessage {message_id?:number;text?:string;caption?:string;photo?:{file_id:string}[];document?:{file_id:string;mime_type?:string;file_size?:number};chat:{id:number;type:string}}
+export interface SupportMessage {from?:{username?:string};message_id?:number;text?:string;caption?:string;photo?:{file_id:string}[];document?:{file_id:string;mime_type?:string;file_size?:number};chat:{id:number;type:string}}
 export async function handleSupportMessage(message:SupportMessage):Promise<boolean>{
  const chat=message.chat.id,id="telegram:"+chat,text=(message.text??message.caption??"").trim();
  const send=(text:string,extra:object={})=>telegram("sendMessage",{chat_id:chat,text,...extra});

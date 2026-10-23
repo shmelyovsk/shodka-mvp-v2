@@ -1,4 +1,5 @@
 import "./config.js";
+import { acceptTelegramLink, refreshTelegramContacts } from "./contacts.js";
 import { handleSupportMessage, type SupportMessage } from "./support.js";
 
 export async function telegram<T>(method: string, payload: object, signal?: AbortSignal): Promise<T> {
@@ -44,6 +45,8 @@ export function startTelegramBot(): (() => void) | undefined {
         const updates = await telegram<Update[]>("getUpdates", { offset, timeout: 25, allowed_updates: ["message"] }, controller.signal);
         for (const update of updates) {
           const message = update.message;
+          if(message?.chat.type === "private" && message.from)await refreshTelegramContacts("telegram:"+message.chat.id,message.from.username);
+          if(message?.chat.type === "private" && await acceptTelegramLink(message.text??"",message.chat.id,message.from?.username)){offset=update.update_id+1;continue;}
           if(message?.chat.type === "private" && await handleSupportMessage(message)){offset=update.update_id+1;continue;}
           if (message?.chat.type === "private" && /^\/(start|help|support|id)(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
             if (/^\/id(?:@\w+)?(?:\s|$)/.test(message.text??"")) {await telegram("sendMessage",{chat_id:message.chat.id,text:`Ваш ID СХОДКИ: telegram:${message.chat.id}`},controller.signal);offset=update.update_id+1;continue;}
