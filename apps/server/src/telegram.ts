@@ -47,8 +47,8 @@ export function startTelegramBot(): (() => void) | undefined {
             const url = process.env.MINI_APP_URL?.trim();
             await telegram("sendMessage", {
               chat_id: message.chat.id,
-              text: "Сходка — компания для спорта в MAX и Telegram. Найдите встречу или создайте свою. Для пользователей 16+.",
-              ...(url?.startsWith("https://") ? { reply_markup: { inline_keyboard: [[{ text: "Открыть Сходку", web_app: { url } }]] } } : {}),
+              text: "Привет! Это «Сходка» 👋\nНайди компанию для спорта — от настольного тенниса до вечернего бега.\nПрисоединяйся к встрече или собирай свою.",
+              ...(url?.startsWith("https://") ? { reply_markup: { inline_keyboard: [[{ text: "Найти сходку", web_app: { url } }]] } } : {}),
             }, controller.signal);
           }
           offset = update.update_id + 1;

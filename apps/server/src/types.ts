@@ -7,6 +7,13 @@ export interface User {
   age: number;
   ageGroup: "16+";
   avatarUrl?: string;
+  avatarSource?: "platform" | "custom";
+  platformAvatarUrl?: string;
+  bio?: string;
+  district?: string;
+  sports?: string[];
+  level?: SkillLevel;
+  notificationsEnabled?: boolean;
   rating?: number;
   reviewsCount?: number;
 }
@@ -16,7 +23,7 @@ export interface Activity {
   title: string;
   sport: string;
   date: string;
-  durationMinutes: number;
+  durationMinutes?: number;
   district: string;
   publicPlace: string;
   exactAddress: string;

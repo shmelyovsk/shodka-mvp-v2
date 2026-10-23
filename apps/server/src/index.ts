@@ -8,13 +8,13 @@ import { requestIdentity, demoEnabled } from "./auth.js";
 import { sendNotification } from "./notifications.js";
 import { startTelegramBot, getTelegramConnectionStatus } from "./telegram.js";
 import { StorageConflict } from "./postgres.js";
-import type { Activity, SkillLevel } from "./types.js";
+import type { Activity, SkillLevel, User } from "./types.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
-app.use(express.json());
+app.use(express.json({ limit: "600kb" }));
 const resolvedUsers = new WeakMap<express.Request, string>();
 // Serialize API operations in this process; PostgreSQL versions also protect across processes.
 let operations = Promise.resolve();
@@ -33,8 +33,13 @@ app.use("/api", (req, res, next) => {
       }
       if (identity && req.method === "GET" && req.path === "/me") {
         const db = await readDatabase();
-        if (!db.users.some(user => user.id === identity.id)) {
-          db.users.push({ id: identity.id, name: identity.name, age: 0, ageGroup: "16+" });
+        const existing = db.users.find(user => user.id === identity.id);
+        if (!existing) {
+          db.users.push({ id: identity.id, name: identity.name, age: 0, ageGroup: "16+", avatarUrl: identity.avatarUrl, platformAvatarUrl: identity.avatarUrl, avatarSource: "platform" });
+          await writeDatabase(db);
+        } else if (existing.platformAvatarUrl !== identity.avatarUrl) {
+          existing.platformAvatarUrl = identity.avatarUrl;
+          if (existing.avatarSource !== "custom") { existing.avatarUrl = identity.avatarUrl; existing.avatarSource = "platform"; }
           await writeDatabase(db);
         }
       }
@@ -42,7 +47,7 @@ app.use("/api", (req, res, next) => {
       const publicRead = req.method === "GET" && (
         /^\/activities(?:\/[^/]+)?$/.test(req.path) || /^\/(max|telegram)\/status$/.test(req.path));
       if (!publicRead && !userId) return void res.status(401).json({ message: "Откройте Сходку через бота MAX или Telegram" });
-      if (userId && !publicRead && req.path !== "/me") {
+      if (userId && req.method !== "GET" && req.path !== "/me") {
         const db = await readDatabase();
         const user = db.users.find(item => item.id === userId);
         if (!user || user.age < 16) return void res.status(403).json({ message: "Сначала укажите возраст в профиле (16+)" });
@@ -61,12 +66,38 @@ app.get("/api/me", async (req, res, next) => {
 });
 app.patch("/api/me", async (req, res, next) => {
   try {
-    const age = Number(req.body.age);
-    if (!Number.isInteger(age) || age < 16 || age > 100) return res.status(400).json({ message: "Укажите возраст от 16 до 100 лет" });
     const db = await readDatabase();
     const user = db.users.find(item => item.id === userIdFromRequest(req));
     if (!user) return res.status(404).json({ message: "Профиль не найден" });
-    user.age = age;
+    const patch: Partial<User> = {};
+    if ("age" in req.body) {
+      const age = Number(req.body.age);
+      if (!Number.isInteger(age) || age < 16 || age > 100) return res.status(400).json({ message: "Укажите возраст от 16 до 100 лет" });
+      patch.age = age;
+    }
+    for (const [key, max] of [["name", 80], ["bio", 500], ["district", 100]] as const) {
+      if (!(key in req.body)) continue;
+      if (typeof req.body[key] !== "string" || req.body[key].trim().length > max || (key === "name" && !req.body[key].trim())) return res.status(400).json({ message: "Проверьте имя, описание и район" });
+      patch[key] = req.body[key].trim();
+    }
+    if ("sports" in req.body) {
+      if (!Array.isArray(req.body.sports) || req.body.sports.length > 12 || req.body.sports.some((item: unknown) => typeof item !== "string" || !item.trim() || item.length > 50)) return res.status(400).json({ message: "Проверьте виды спорта" });
+      patch.sports = [...new Set<string>(req.body.sports.map((item: string) => item.trim()))];
+    }
+    if ("level" in req.body) {
+      if (!["beginner", "any", "intermediate"].includes(req.body.level)) return res.status(400).json({ message: "Выберите уровень подготовки" });
+      patch.level = req.body.level;
+    }
+    if ("notificationsEnabled" in req.body) {
+      if (typeof req.body.notificationsEnabled !== "boolean") return res.status(400).json({ message: "Некорректная настройка уведомлений" });
+      patch.notificationsEnabled = req.body.notificationsEnabled;
+    }
+    if ("avatarUrl" in req.body) {
+      if (typeof req.body.avatarUrl !== "string" || req.body.avatarUrl.length > 400000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(req.body.avatarUrl)) return res.status(400).json({ message: "Загрузите фотографию JPG, PNG или WebP до 300 КБ" });
+      patch.avatarUrl = req.body.avatarUrl; patch.avatarSource = "custom";
+    }
+    if (req.body.usePlatformAvatar === true) { patch.avatarUrl = user.platformAvatarUrl; patch.avatarSource = "platform"; }
+    Object.assign(user, patch);
     await writeDatabase(db);
     res.json({ user });
   } catch (error) { next(error); }
@@ -75,6 +106,12 @@ app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegra
 
 function userIdFromRequest(req: express.Request): string {
   return String(resolvedUsers.get(req) ?? "");
+}
+
+function publicUser(user?: User) {
+  if (!user) return undefined;
+  const { id, name, age, ageGroup, avatarUrl, bio, district, sports, level, rating, reviewsCount } = user;
+  return { id, name, age, ageGroup, avatarUrl, bio, district, sports, level, rating, reviewsCount };
 }
 
 function participantsForActivity(db: Awaited<ReturnType<typeof readDatabase>>, activity: Activity) {
@@ -129,7 +166,7 @@ app.get("/api/activities", async (req, res, next) => {
         const { exactAddress: _hidden, ...item } = activity;
         return {
           ...item,
-          organizer: db.users.find((user) => user.id === activity.organizerId),
+          organizer: publicUser(db.users.find((user) => user.id === activity.organizerId)),
           participants: participantsForActivity(db, activity),
         };
       });
@@ -154,7 +191,7 @@ app.get("/api/activities/:id", async (req, res, next) => {
     const visibleActivity = maySeeAddress ? activity : publicActivity;
     res.json({
       ...visibleActivity,
-      organizer: db.users.find((user) => user.id === activity.organizerId),
+      organizer: publicUser(db.users.find((user) => user.id === activity.organizerId)),
       participants: participantsForActivity(db, activity),
     });
   } catch (error) {
@@ -202,7 +239,6 @@ app.post("/api/activities", async (req, res, next) => {
       title: String(req.body.title),
       sport: String(req.body.sport),
       date: String(req.body.date),
-      durationMinutes: Number(req.body.durationMinutes ?? 60),
       district: String(req.body.district),
       publicPlace: String(req.body.publicPlace),
       exactAddress: String(req.body.exactAddress ?? req.body.publicPlace),
@@ -270,8 +306,6 @@ app.get("/api/users/:userId/activities", async (req, res, next) => {
     const applications = db.applications.filter((item) => item.userId === req.params.userId);
     const appliedIds = new Set(applications.map((item) => item.activityId));
     const activities = db.activities
-      .filter((item) => item.status !== "cancelled")
-      .filter((item) => new Date(item.date).getTime() >= Date.now())
       .filter((item) => item.organizerId === req.params.userId || appliedIds.has(item.id))
       .map((activity) => {
         const applicationStatus = applications.find((item) => item.activityId === activity.id)?.status;
@@ -280,7 +314,7 @@ app.get("/api/users/:userId/activities", async (req, res, next) => {
         const { exactAddress, ...publicActivity } = activity;
         return {
           ...(maySeeAddress ? activity : publicActivity),
-          organizer: db.users.find((user) => user.id === activity.organizerId),
+          organizer: publicUser(db.users.find((user) => user.id === activity.organizerId)),
           participants: participantsForActivity(db, activity),
           relation: isOrganizer ? "organizer" : "participant",
           applicationStatus,
@@ -302,7 +336,7 @@ app.get("/api/organizers/:userId/applications", async (req, res, next) => {
       .map((application) => ({
         ...application,
         activity: db.activities.find((item) => item.id === application.activityId),
-        user: db.users.find((item) => item.id === application.userId),
+        user: publicUser(db.users.find((item) => item.id === application.userId)),
       }));
     res.json(results);
   } catch (error) {

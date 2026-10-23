@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+const source = await readFile(new URL('../apps/web/src/history.ts', import.meta.url), 'utf8');
+const { outputText } = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } });
+const { activityPhase, inHistoryTab } = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
+const meeting = {date:'2026-10-23T10:00:00Z',status:'open'};
+assert.equal(activityPhase(meeting,new Date('2026-10-23T09:59:00Z')),'upcoming');
+assert.equal(activityPhase(meeting,new Date('2026-10-23T10:00:00Z')),'started');
+assert.equal(activityPhase(meeting,new Date('2026-10-23T20:59:00Z')),'started');
+assert.equal(activityPhase(meeting,new Date('2026-10-23T21:00:00Z')),'past');
+assert.equal(inHistoryTab(meeting,'upcoming',new Date('2026-10-23T11:00:00Z')),true);
+assert.equal(inHistoryTab(meeting,'past',new Date('2026-10-24T10:00:00Z')),true);
+assert.equal(inHistoryTab({...meeting,status:'cancelled'},'cancelled'),true);
+assert.equal(inHistoryTab({...meeting,status:'cancelled'},'upcoming'),false);
+console.log('PASS: archive boundaries, meetings starting today, Moscow midnight, cancelled meetings');
