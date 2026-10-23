@@ -1,0 +1,24 @@
+name: Meetup reminders
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: meetup-reminders
+  cancel-in-progress: false
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      REMINDER_URL: ${{ secrets.REMINDER_URL }}
+      REMINDER_CRON_SECRET: ${{ secrets.REMINDER_CRON_SECRET }}
+    steps:
+      - name: Trigger reminder scan
+        if: env.REMINDER_URL != '' && env.REMINDER_CRON_SECRET != ''
+        run: |
+          curl --fail --silent --show-error --max-time 360 --request POST --header "Authorization: Bearer $REMINDER_CRON_SECRET" "$REMINDER_URL"
+      - name: Explain missing configuration
+        if: env.REMINDER_URL == '' || env.REMINDER_CRON_SECRET == ''
+        run: echo "Set REMINDER_URL and REMINDER_CRON_SECRET repository secrets to enable scheduled requests."
