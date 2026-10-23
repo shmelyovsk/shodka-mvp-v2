@@ -11,7 +11,11 @@ export function platformHeaders(): Record<string, string> {
   if (maxData) return { "x-platform": "max", "x-init-data": maxData };
   return {};
 }
-export interface Profile { id: string; name: string; age: number }
+export interface Profile {
+  id: string; name: string; age: number; avatarUrl?: string; platformAvatarUrl?: string;
+  avatarSource?: "platform" | "custom"; bio?: string; district?: string; sports?: string[];
+  level?: "beginner" | "any" | "intermediate"; notificationsEnabled?: boolean;
+}
 export const DEFAULT_USER_ID = "user-1";
 
 export async function api<T>(path: string, options: RequestInit = {}, userId = DEFAULT_USER_ID): Promise<T> {

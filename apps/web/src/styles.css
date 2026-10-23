@@ -122,3 +122,67 @@ dd { margin: 0; font-size: 14px; font-weight: 650; }
   .modal-backdrop { align-items: center; }
   .modal { border-radius: 28px; max-width: 520px; }
 }
+
+/* First visit and sign-in screens */
+.welcome-shell { display: grid; align-content: start; padding: 64px 24px 40px; min-height: 100svh; }
+.welcome-card { width: 100%; max-width: 400px; margin: 0 auto; min-width: 0; }
+.welcome-card h1 { margin: 18px 0 10px; font-size: clamp(25px, 5vw, 32px); line-height: 1.2; letter-spacing: -.7px; overflow-wrap: anywhere; }
+.welcome-intro { margin: 0 0 16px; font-size: 18px; font-weight: 650; }
+.welcome-description { margin: 0; color: #69766d; font-size: 15px; line-height: 1.6; }
+.welcome-form { margin-top: 28px; gap: 12px; padding-bottom: 0; }
+.welcome-form label { font-size: 14px; gap: 10px; }
+.welcome-form input { min-height: 50px; font-size: 16px; }
+.welcome-hint { margin: -2px 0 8px; color: #69766d; font-size: 13px; line-height: 1.5; }
+.welcome-form .primary { min-height: 50px; }
+.welcome-error { margin: 4px 0 0; padding: 12px; border-radius: 12px; background: #fde4de; color: #923b2c; font-size: 14px; line-height: 1.5; }
+@media (min-width: 600px) { .welcome-shell { min-height: calc(100svh - 48px); padding: 64px 40px 48px; } }
+@media (max-width: 360px) { .welcome-shell { padding: 40px 20px 32px; } }
+/* Account and consistent navigation */
+.site-header { padding: 20px 20px 16px; min-height: 80px; }
+.city-label { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
+.profile-button { display: grid; padding: 0; border: 2px solid transparent; border-radius: 50%; background: #e7ecdf; overflow: hidden; }
+.profile-button[aria-current="page"] { border-color: #819d31; }
+.back-button { display: flex; align-items: center; gap: 5px; padding: 8px 0; border: 0; background: transparent; color: #17251d; font: inherit; font-size: 14px; font-weight: 650; }
+nav { padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+nav button { display: grid; justify-items: center; gap: 3px; min-height: 58px; font-size: 11px; font-weight: 650; }
+nav button .nav-icon { display: grid; place-items: center; width: 48px; height: 34px; border-radius: 13px; transition: background .15s; }
+nav button.active .nav-icon { background: #e3f4b5; }
+nav button:focus-visible, .profile-button:focus-visible, .text-button:focus-visible { outline: 3px solid #91ae36; outline-offset: 3px; }
+.account-page { padding: 2px 4px 20px; }
+.account-heading h1 { font-size: 28px; letter-spacing: -.7px; line-height: 1.2; margin: 8px 0; }
+.account-heading > p { margin: 0; font-size: 14px; color: #69766d; line-height: 1.6; }
+.account-form { margin-top: 24px; }
+.account-fields { display: grid; min-width: 0; gap: 18px; padding: 0; margin: 0; border: 0; }
+.account-fields:disabled { opacity: .65; }
+.account-photo-row { display: flex; gap: 16px; align-items: center; padding: 16px; border: 1px solid #e0e5df; border-radius: 20px; background: white; }
+.account-photo-row > div { min-width: 0; }
+.account-photo { width: 80px; height: 80px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
+.account-initial { display: grid; place-items: center; color: #17251d; background: #e3f4b5; font-size: 30px; font-weight: 700; }
+.account-caption { color: #69766d; font-size: 12px; line-height: 1.5; margin: 7px 0 0; }
+.text-button { border: 0; background: none; color: #52651f; padding: 6px 0; text-align: left; font-size: 12px; }
+.account-feedback { padding: 12px 14px; background: #edf7d0; border-radius: 12px; line-height: 1.5; font-size: 14px; margin: 0; }
+.sports-options { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; }
+.sports-options legend { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+.sports-options label { display: block; position: relative; }
+.sports-options input { position: absolute; width: 1px; height: 1px; opacity: 0; padding: 0; }
+.sports-options span { display: block; padding: 9px 12px; border: 1px solid #dce2dc; border-radius: 20px; background: white; font-size: 12px; font-weight: 500; }
+.sports-options input:checked + span { background: #edf7d0; border-color: #819d31; color: #354618; }
+.sports-options input:focus-visible + span { outline: 3px solid #91ae36; outline-offset: 2px; }
+.form .notification-toggle { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid #e0e5df; border-radius: 14px; background: white; line-height: 1.5; }
+.form .notification-toggle input { width: 20px; height: 20px; accent-color: #52651f; flex: 0 0 auto; }
+.notification-toggle small { display: block; color: #69766d; font-weight: 400; margin-top: 3px; }
+.account-history { margin-top: 20px; border-top: 1px solid #e0e5df; padding-top: 18px; }
+.account-history h2 { font-size: 19px; margin: 0 0 12px; }
+.account-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.account-stats > div { display: grid; gap: 5px; padding: 16px; border-radius: 16px; background: #edf2e7; }
+.account-stats strong { font-size: 24px; }
+.account-stats span { font-size: 12px; color: #69766d; }
+.support-card { margin: 24px 0 8px; border: 1px solid #dbe6b9; border-radius: 18px; padding: 16px; background: #f3fadf; }
+.support-card summary { cursor: pointer; font-weight: 650; font-size: 15px; }
+.support-card summary span { float: right; font-size: 22px; line-height: 1; }
+.support-card p { font-size: 14px; line-height: 1.6; }
+.history-tabs { display: flex; gap: 5px; padding: 5px; background: #edf2e7; border-radius: 14px; margin-bottom: 16px; }
+.history-tabs button { flex: 1; min-width: 0; padding: 10px 5px; border: 0; background: transparent; border-radius: 10px; color: #69766d; font-size: 12px; }
+.history-tabs button.active { background: white; color: #17251d; box-shadow: 0 2px 6px #17251d0a; font-weight: 650; }
+.history-note { color: #69766d; font-size: 12px; line-height: 1.5; }
+@media (max-width: 360px) { .account-photo-row { padding: 12px; gap: 12px; } .account-photo { width: 64px; height: 64px; } }
