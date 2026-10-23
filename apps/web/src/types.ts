@@ -8,6 +8,7 @@ export interface Activity {
   format?: "offline" | "online";
   connectionLink?: string;
   gamePlatform?: string;
+  moderationHidden?:boolean;
   district: string;
   publicPlace: string;
   exactAddress?: string;

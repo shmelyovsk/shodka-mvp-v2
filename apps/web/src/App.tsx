@@ -1,5 +1,6 @@
 import { FormEvent, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, DEFAULT_USER_ID, type Profile } from "./api";
+import { ModerationView } from "./ModerationView";
 import { FriendsView } from "./FriendsView";
 import { PublicProfileModal } from "./PublicProfileModal";
 import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
@@ -8,7 +9,7 @@ import { NavIcon } from "./NavIcon";
 import { activityPhase, inHistoryTab, type HistoryTab } from "./history";
 import type { Activity, OrganizerApplication } from "./types";
 
-type Tab = "catalog" | "create" | "requests" | "mine" | "profile" | "friends";
+type Tab = "catalog" | "create" | "requests" | "mine" | "profile" | "friends" | "moderation";
 type DateFilter = "all" | "today" | "tomorrow" | "week";
 
 const ProfileOpener = createContext<(id: string) => void>(() => {});
@@ -119,7 +120,7 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
     <article className="activity-card" onClick={onOpen}>
       <div className="card-topline">
         <span className="sport-pill">{activity.sport}</span>
-        <span className={free <= 2 ? "places hot" : "places"}>{phase === "cancelled" ? "Отменена" : phase === "past" ? "Время встречи прошло" : phase === "started" ? "Уже началась" : free > 0 ? `${free} мест` : "Набор закрыт"}</span>
+        <span className={free <= 2 ? "places hot" : "places"}>{activity.moderationHidden ? "Скрыта модерацией" : phase === "cancelled" ? "Отменена" : phase === "past" ? "Время встречи прошло" : phase === "started" ? "Уже началась" : free > 0 ? `${free} мест` : "Набор закрыт"}</span>
       </div>
       <h3><button className="card-title-button" onClick={event=>{event.stopPropagation();onOpen();}}>{activity.title}</button></h3>
       <p className="meta">{formatDate(activity.date)}</p>
@@ -147,6 +148,7 @@ function ActivityCard({ activity, onOpen }: { activity: Activity; onOpen: () => 
 }
 
 function App() {
+  const [moderator,setModerator]=useState(false);
   const [viewedUser, setViewedUser] = useState<string | null>(null);
   const [friendsOnly, setFriendsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -172,12 +174,18 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<{ user: Profile; demo: boolean }>("/api/me").then(result => {
-      setProfile(result.user); setCurrentUserId(result.user.id); setDemo(result.demo);
+    api<{ user: Profile; demo: boolean; moderator:boolean }>("/api/me").then(result => {
+      setModerator(result.moderator); setProfile(result.user); setCurrentUserId(result.user.id); setDemo(result.demo);
     }).catch(error => setAuthError(error.message)).finally(() => setAuthReady(true));
   }, []);
   async function saveProfile(patch: Record<string, unknown>) {
     const result = await api<{ user: Profile }>("/api/me", { method: "PATCH", body: JSON.stringify(patch) }, currentUserId);
+    for(const key of ["nickname","telegramContact"] as const) {
+      if(typeof patch[key]==="string") {
+        const expected=(patch[key] as string).trim().replace(/^@/,"").toLowerCase();
+        if((result.user[key]??"").toLowerCase()!==expected)throw new Error("Сервер не сохранил новые поля. Проверьте обновление сервера и попробуйте снова");
+      }
+    }
     setProfile(result.user); setAuthError("");
     await loadActivities(false);
   }
@@ -220,7 +228,7 @@ function App() {
     return () => window.clearInterval(refreshTimer);
   }, [friendsOnly, currentUserId]);
   useEffect(() => { if (authReady && profile && (tab === "mine" || tab === "profile")) void loadMine().catch(error => setMessage(error.message)); }, [tab, currentUserId, authReady]);
-  useEffect(() => { if (authReady && profile && tab === "requests") void loadApplications().catch(error => setMessage(error.message)); }, [tab, currentUserId]);
+  useEffect(() => { if (authReady && profile && (tab === "requests" || tab === "mine")) void loadApplications().catch(error => setMessage(error.message)); }, [tab, currentUserId]);
 
   const sports = useMemo(() => ["Все", ...Array.from(new Set(activities.map((item) => item.sport)))], [activities]);
   const visible = activities.filter((item) => {
@@ -319,13 +327,13 @@ function App() {
   }
 
   if (!authReady) return <div className="app-shell welcome-shell"><p className="empty">Проверяем вход…</p></div>;
-  if (!profile) return <div className="app-shell welcome-shell"><section className="welcome-card"><span className="eyebrow">Москва · 16+</span><h1>Сходка</h1><p>{authError}</p><p>Откройте приложение из бота MAX или Telegram.</p><a href="https://t.me/skhodkaa_bot">Telegram</a> · <a href="https://max.ru/t221_hakaton_max_bot">MAX</a></section></div>;
+  if (!profile) return <div className="app-shell welcome-shell"><section className="welcome-card"><span className="eyebrow">Москва · 16+</span><h1>Сходка</h1><p>{authError}</p><button className="primary" onClick={()=>window.location.reload()}>Повторить подключение</button><p>Откройте приложение из бота MAX или Telegram.</p><a href="https://t.me/skhodkaa_bot">Telegram</a> · <a href="https://max.ru/t221_hakaton_max_bot">MAX</a></section></div>;
 
   return (
     <ProfileOpener.Provider value={setViewedUser}>
     <div className="app-shell">
       <header className="site-header">
-        {(tab === "profile" || tab === "friends") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва <span className="age-mark">· 16+</span></span>}
+        {(tab === "profile" || tab === "moderation") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва <span className="age-mark">· 16+</span></span>}
         <button className="profile-button" aria-label="Открыть личный кабинет" aria-current={tab === "profile" ? "page" : undefined} onClick={() => navigate("profile")}>
           <PersonAvatar name={demo ? (currentUserId === "user-1" ? "Ира" : "Саша") : profile.name} avatarUrl={demo ? undefined : profile.avatarUrl} size="large" />
         </button>
@@ -338,8 +346,11 @@ function App() {
       </div>}
 
       <main>
+        {(profile.moderationWarning||profile.suspended)&&<div className="notice" role="alert">{profile.suspended?"Ваш аккаунт ограничен модерацией. Публикации и заявки недоступны.":profile.moderationWarning}</div>}
+        {tab === "moderation" && moderator && <ModerationView currentUserId={currentUserId} onChanged={()=>void loadActivities(false)}/>}
+        {(tab==="mine"||tab==="requests")&&<div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{applications.filter(item=>item.status==="pending"&&item.activity?.status!=="cancelled"&&new Date(item.activity?.date??0).getTime()>clock).length}</span></button></div>}
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}
-        {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} onFriends={()=>navigate("friends")} />}
+        {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} moderator={moderator} onModeration={()=>navigate("moderation")} />}
 
         {tab === "friends" && <FriendsView key={viewedUser??"friends"} currentUserId={currentUserId} onProfile={setViewedUser}/>}
 
@@ -387,7 +398,7 @@ function App() {
               <label>Категория<select name="category" value={createCategory} onChange={event=>{setCreateCategory(event.target.value as "sport"|"games");setChosenActivity("");}}><option value="sport">Спорт</option><option value="games">Компьютерные игры</option></select></label>
               <label>Занятие<select required name="sport" value={chosenActivity} onChange={event=>setChosenActivity(event.target.value)}><option value="" disabled>Выберите</option>{(createCategory==="sport"?SPORT_OPTIONS:GAME_OPTIONS).map(item=><option key={item}>{item}</option>)}<option>Другое</option></select></label>
               {chosenActivity==="Другое"&&<label>Какое занятие?<input required name="customSport" maxLength={80} placeholder="Напишите название спорта или игры"/></label>}
-              <label>Формат<select name="format" value={createFormat} onChange={event=>setCreateFormat(event.target.value as "offline"|"online")}><option value="offline">Личная встреча</option><option value="online">Онлайн, из дома</option></select></label>
+              <label>Формат<select name="format" value={createFormat} onChange={event=>setCreateFormat(event.target.value as "offline"|"online")}><option value="offline">{createCategory==="games"?"Компьютерный клуб":"Личная встреча"}</option><option value="online">Онлайн, из дома</option></select></label>
               {createCategory==="games"&&<label>Платформа / сервер / уровень<input name="gamePlatform" maxLength={100} placeholder="Например, ПК · Steam · любой ранг"/></label>}
               <label>Дата и время<input required type="datetime-local" name="date" min={minimumDateTime()} /></label>
               <div className="form-row">{createFormat==="offline"&&<label>Район<input required name="district" placeholder="Сокол" /></label>}<label>Участников<input required type="number" min="2" max="30" name="capacity" defaultValue="4" /></label></div>
@@ -396,7 +407,7 @@ function App() {
               <div className="form-row"><label>Уровень<select name="level" defaultValue="any"><option value="beginner">Начинающий</option><option value="any">Любой</option><option value="intermediate">Средний</option></select></label><label>С человека, ₽<input type="number" min="0" name="price" defaultValue="0" /></label></div>
               <div className="form-row"><label>Возраст от<input type="number" min="16" max="100" name="minAge" placeholder="Необязательно" /></label><label>Возраст до<input type="number" min="16" max="100" name="maxAge" placeholder="Необязательно" /></label></div>
               <p className="form-hint">Если поля пустые, присоединиться сможет любой пользователь 16+.</p>
-              <label>Инвентарь<input name="equipment" placeholder="Мяч уже есть" /></label>
+              {createCategory!=="games"&&<label>Инвентарь<input name="equipment" placeholder="Мяч уже есть" /></label>}
               <label>Описание<textarea name="description" rows={3} placeholder="Расскажите о формате встречи" /></label>
               <button className="primary full" type="submit">Опубликовать</button>
             </form>
@@ -458,7 +469,7 @@ function App() {
       </main>
 
       <nav aria-label="Основная навигация">
-        {(["catalog", "create", "requests", "mine"] as const).map(item => <button key={item} aria-current={tab === item ? "page" : undefined} className={tab === item ? "active" : ""} onClick={() => navigate(item)}><span className="nav-icon"><NavIcon kind={item} /></span>{{ catalog: "Сходки", create: "Создать", requests: "Заявки", mine: "Мои" }[item]}</button>)}
+        {(["catalog", "create", "friends", "mine"] as const).map(item => <button key={item} aria-current={tab === item || item==="mine" && tab==="requests" ? "page" : undefined} className={tab === item || item==="mine" && tab==="requests" ? "active" : ""} onClick={() => navigate(item)}><span className="nav-icon"><NavIcon kind={item} /></span>{{ catalog: "Сходки", create: "Создать", friends: "Друзья", mine: "Мои" }[item]}</button>)}
       </nav>
 
       {selected && (
@@ -478,7 +489,7 @@ function App() {
             {selected.organizer?.bio && <p className="modal-lead">Об организаторе: {selected.organizer.bio}</p>}
             <dl>
               <div><dt>Когда</dt><dd>{formatDate(selected.date)}</dd></div>
-              <div><dt>Формат</dt><dd>{selected.format==="online"?"Онлайн, из дома":"Личная встреча"}</dd></div>
+              <div><dt>Формат</dt><dd>{selected.format==="online"?"Онлайн, из дома":selected.category==="games"?"Компьютерный клуб":"Личная встреча"}</dd></div>
               <div><dt>Где</dt><dd>{selected.format==="online"?"Онлайн":`${selected.publicPlace}, ${selected.district}`}</dd></div>
               {selected.gamePlatform&&<div><dt>Платформа</dt><dd>{selected.gamePlatform}</dd></div>}
               {selected.connectionLink&&<div><dt>Подключение</dt><dd><a href={selected.connectionLink} target="_blank" rel="noreferrer">Открыть ссылку ↗</a></dd></div>}
@@ -487,14 +498,15 @@ function App() {
               )}
               <div><dt>Уровень</dt><dd>{levelNames[selected.level]}</dd></div>
               <div><dt>Возраст</dt><dd>{selected.ageGroup}</dd></div>
-              <div><dt>Инвентарь</dt><dd>{selected.equipment}</dd></div>
+              {selected.category!=="games"&&<div><dt>Инвентарь</dt><dd>{selected.equipment||"Не требуется"}</dd></div>}
               <div><dt>Стоимость</dt><dd>{selected.price ? `${selected.price} ₽ с человека` : "Бесплатно"}</dd></div>
             </dl>
             {selected.organizerId!==currentUserId&&<button className="secondary full contact-organizer" onClick={()=>setViewedUser(selected.organizerId)}>Профиль и контакт организатора</button>}
             {selected.organizerId === currentUserId && activityPhase(selected) === "upcoming" && (
               <button className="secondary danger full" onClick={() => void cancelActivity()}>Отменить сходку</button>
             )}
-            {selected.organizerId !== currentUserId && <button className="primary full" disabled={selected.status !== "open" || new Date(selected.date).getTime() <= clock} onClick={() => void joinActivity()}>Подать заявку</button>}
+            {selected.organizerId!==currentUserId&&<button className="text-button report-button" onClick={async()=>{const reason=window.prompt("Причина жалобы на сходку (до 500 символов)");if(!reason?.trim())return;try{await api("/api/reports",{method:"POST",body:JSON.stringify({kind:"activity",targetId:selected.id,reason})},currentUserId);setSelected(null);setMessage("Жалоба отправлена модераторам");}catch(error){setSelected(null);setMessage(error instanceof Error?error.message:"Не удалось отправить жалобу");}}}>Пожаловаться на сходку</button>}
+            {selected.organizerId !== currentUserId && <button className="primary full" disabled={selected.moderationHidden || selected.status !== "open" || new Date(selected.date).getTime() <= clock} onClick={() => void joinActivity()}>Подать заявку</button>}
           </article>
         </div>
       )}

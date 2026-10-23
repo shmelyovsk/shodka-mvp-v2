@@ -7,6 +7,7 @@ import { getMaxConnectionStatus, startMaxBot } from "./max.js";
 import { requestIdentity, demoEnabled } from "./auth.js";
 import { sendNotification } from "./notifications.js";
 import { startTelegramBot, getTelegramConnectionStatus } from "./telegram.js";
+import { checkContent, ContentRejected, installModerationRoutes, isModerator } from "./moderation.js";
 import { StorageConflict } from "./postgres.js";
 import { installSocialRoutes, publicProfile, visibleActivity } from "./social.js";
 import type { Activity, SkillLevel, User } from "./types.js";
@@ -16,6 +17,9 @@ const port = Number(process.env.PORT ?? 3000);
 
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json({ limit: "600kb" }));
+const API_VERSION = 4;
+app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation"],release:"social-moderation-v4"}));
+app.use("/api",(_req,res,next)=>{res.setHeader("Cache-Control","no-store");next();});
 const resolvedUsers = new WeakMap<express.Request, string>();
 // Serialize API operations in this process; PostgreSQL versions also protect across processes.
 let operations = Promise.resolve();
@@ -36,10 +40,11 @@ app.use("/api", (req, res, next) => {
         const db = await readDatabase();
         const existing = db.users.find(user => user.id === identity.id);
         if (!existing) {
-          db.users.push({ id: identity.id, name: identity.name, age: 0, ageGroup: "16+", avatarUrl: identity.avatarUrl, platformAvatarUrl: identity.avatarUrl, avatarSource: "platform", telegramContact: identity.telegramContact });
+          let name=identity.name;try{checkContent(name);}catch(error){if(error instanceof ContentRejected)name="Участник";else throw error;}
+          db.users.push({ id: identity.id, name, age: 0, ageGroup: "16+", avatarUrl: identity.avatarUrl, platformAvatarUrl: identity.avatarUrl, avatarSource: "platform", telegramContact: identity.telegramContact });
           await writeDatabase(db);
-        } else if (existing.platformAvatarUrl !== identity.avatarUrl || !existing.telegramContact && identity.telegramContact) {
-          if (!existing.telegramContact && identity.telegramContact) existing.telegramContact = identity.telegramContact;
+        } else if (existing.platformAvatarUrl !== identity.avatarUrl || existing.telegramContact === undefined && identity.telegramContact) {
+          if (existing.telegramContact === undefined && identity.telegramContact) existing.telegramContact = identity.telegramContact;
           existing.platformAvatarUrl = identity.avatarUrl;
           if (existing.avatarSource !== "custom") { existing.avatarUrl = identity.avatarUrl; existing.avatarSource = "platform"; }
           await writeDatabase(db);
@@ -54,6 +59,9 @@ app.use("/api", (req, res, next) => {
         const user = db.users.find(item => item.id === userId);
         if (!user || user.age < 16) return void res.status(403).json({ message: "Сначала укажите возраст в профиле (16+)" });
       }
+      if(userId && !publicRead && req.path !== "/me" && !isModerator(userId)) {
+        const db=await readDatabase();if(db.users.find(user=>user.id===userId)?.suspended)return void res.status(403).json({message:"Доступ ограничен модерацией. Проверьте уведомление в профиле"});
+      }
       next();
     } catch (error) { next(error); }
   });
@@ -63,7 +71,7 @@ app.get("/api/me", async (req, res, next) => {
   try {
     const db = await readDatabase();
     const user = db.users.find(item => item.id === userIdFromRequest(req));
-    res.json({ user, demo: demoEnabled() && user?.id.startsWith("user-") });
+    res.json({ moderator:isModerator(userIdFromRequest(req)), user, demo: demoEnabled() && user?.id.startsWith("user-") });
   } catch (error) { next(error); }
 });
 app.patch("/api/me", async (req, res, next) => {
@@ -116,11 +124,13 @@ app.patch("/api/me", async (req, res, next) => {
       if (typeof req.body.shareContact !== "boolean") return res.status(400).json({ message: "Проверьте настройку контакта" });
       patch.shareContact = req.body.shareContact;
     }
+    checkContent(patch.name, patch.bio, patch.nickname, patch.district, ...(patch.sports??[]));
     Object.assign(user, patch);
     await writeDatabase(db);
     res.json({ user });
   } catch (error) { next(error); }
 });
+installModerationRoutes(app, userIdFromRequest);
 installSocialRoutes(app, userIdFromRequest);
 
 app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegramConnectionStatus()); });
@@ -154,7 +164,7 @@ function ageLimitLabel(minAge?: number, maxAge?: number): string {
 }
 
 app.get("/health", async (_req, res) => {
-  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", storage: storageKind }); }
+  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"social-moderation-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
   catch { res.status(503).json({ status: "unavailable", service: "shodka-api", storage: storageKind }); }
 });
 
@@ -177,7 +187,7 @@ app.get("/api/activities", async (req, res, next) => {
     const activities = db.activities
       .filter(item => req.query.friends !== "true" || friends.has(item.organizerId))
       .filter(item => !req.query.category || (item.category ?? "sport") === req.query.category)
-      .filter((item) => item.status !== "cancelled")
+      .filter((item) => item.status !== "cancelled" && !item.moderationHidden && !db.users.find(user=>user.id===item.organizerId)?.suspended)
       .filter((item) => new Date(item.date).getTime() >= Date.now())
       .filter((item) => !sport || item.sport.toLowerCase() === sport)
       .filter((item) => !district || item.district.toLowerCase().includes(district))
@@ -208,6 +218,7 @@ app.get("/api/activities/:id", async (req, res, next) => {
       (item) => item.activityId === activity.id && item.userId === userId && item.status === "approved",
     );
     const maySeeAddress = approved || activity.organizerId === userId;
+    if ((activity.moderationHidden || db.users.find(user=>user.id===activity.organizerId)?.suspended) && !maySeeAddress && !isModerator(userId)) return res.status(404).json({message:"Сходка недоступна"});
     const shownActivity = visibleActivity(activity, maySeeAddress);
     res.json({
       ...shownActivity,
@@ -227,7 +238,7 @@ app.post("/api/activities", async (req, res, next) => {
     if (!["sport", "games"].includes(category) || !["offline", "online"].includes(format)) return res.status(400).json({ message: "Проверьте категорию и формат" });
     const required = ["title", "sport", "date", "level", "capacity", ...(format === "offline" ? ["district", "publicPlace"] : [])];
     const missing = required.filter((key) => !req.body[key]);
-    if (missing.length) return res.status(400).json({ message: `Заполните поля: ${missing.join(", ")}` });
+    if (missing.length) { const labels:Record<string,string>={title:"название",sport:"занятие",date:"дата и время",level:"уровень",capacity:"число участников",district:"район",publicPlace:category==="games"?"название клуба":"место встречи"}; return res.status(400).json({message:`Заполните поля: ${missing.map(key=>labels[key]??key).join(", ")}`}); }
     for (const [key, max] of [["title", 120], ["sport", 80], ["district", 100], ["publicPlace", 200], ["description", 2000], ["equipment", 300], ["exactAddress", 300], ["gamePlatform", 100]] as const) {
       if (req.body[key] !== undefined && (typeof req.body[key] !== "string" || req.body[key].length > max)) return res.status(400).json({ message: "Проверьте поля сходки: слишком длинный текст" });
     }
@@ -268,6 +279,7 @@ app.post("/api/activities", async (req, res, next) => {
       return res.status(400).json({ message: `Ваш возраст больше установленного максимума ${maxAge} лет` });
     }
 
+    checkContent(req.body.title,req.body.sport,req.body.description,req.body.publicPlace,req.body.district,req.body.gamePlatform,req.body.equipment);
     const activity: Activity = {
       id: nanoid(),
       title: String(req.body.title),
@@ -281,7 +293,7 @@ app.post("/api/activities", async (req, res, next) => {
       capacity,
       approvedCount: 1,
       price,
-      equipment: String(req.body.equipment ?? "Не требуется"),
+      equipment: category === "games" ? "" : String(req.body.equipment ?? "Не требуется"),
       description: String(req.body.description ?? ""),
       ageGroup: ageLimitLabel(minAge, maxAge),
       minAge,
@@ -305,6 +317,7 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     const activity = db.activities.find((item) => item.id === req.params.id);
     if (!activity) return res.status(404).json({ message: "Активность не найдена" });
     if (new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка уже прошла" });
+    if (activity.moderationHidden || db.users.find(user=>user.id===activity.organizerId)?.suspended) return res.status(409).json({message:"Сходка скрыта модерацией"});
     if (activity.status !== "open") return res.status(409).json({ message: "Набор уже закрыт" });
     if (activity.organizerId === userId) return res.status(409).json({ message: "Организатор уже участвует" });
     const user = db.users.find((item) => item.id === userId);
@@ -426,7 +439,10 @@ app.post("/api/activities/:id/cancel", async (req, res, next) => {
   }
 });
 
+app.use("/api",(_req,res)=>{res.status(404).json({message:"Этот раздел недоступен в текущей версии сервера. Обновите сервер приложения"});});
+
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (error instanceof ContentRejected) return void res.status(400).json({message:error.message});
   if (error instanceof StorageConflict) return void res.status(409).json({ message: error.message });
   console.error("API operation failed");
   res.status(500).json({ message: "Внутренняя ошибка сервера" });

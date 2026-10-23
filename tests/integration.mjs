@@ -7,7 +7,7 @@ const base = 'http://127.0.0.1:3197';
 const dataFile = join(process.cwd(), `shodka-test-${randomUUID()}.json`);
 const mock = `const real = globalThis.fetch; globalThis.fetch = (url, options) => String(url).startsWith('https://') ? (String(url).includes('api.telegram.org') && String(url).endsWith('/sendMessage') && console.log('TELEGRAM_MESSAGE_SENT'), Promise.resolve(new Response(JSON.stringify({ok:true,result:[],user_id:1,first_name:'Bot',is_bot:true})))) : real(url,options);`;
 const child = spawn(process.execPath, ['--import', 'data:text/javascript,' + encodeURIComponent(mock), 'apps/server/dist/index.js'], {
-  env: {...process.env, PORT:'3197', DATA_FILE:dataFile, NODE_ENV:'production', DEMO_MODE:'true',
+  env: {...process.env, PORT:'3197', DATA_FILE:dataFile, NODE_ENV:'production', DEMO_MODE:'true', MODERATOR_USER_IDS:'max:789,telegram:456',
     MAX_BOT_TOKEN:'max-test', TELEGRAM_BOT_TOKEN:'telegram-test', MAX_BOT_POLLING_ENABLED:'false', TELEGRAM_BOT_POLLING_ENABLED:'false'},
   stdio:['ignore','pipe','pipe'],
 });
@@ -26,6 +26,8 @@ async function call(path,headers={},method='GET',body) {
 }
 try {
  for(let i=0;i<100;i++){try{if((await fetch(base+'/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+ assert.equal((await call('/api/capabilities')).body.apiVersion,4);
+ assert.equal((await call('/health')).body.apiVersion,4);
  assert.equal((await call('/api/me')).status,401,'production must reject demo fallback');
  const max=signed('max',123),tg=signed('telegram',123);
  assert.equal((await call('/api/me',max)).body.user.id,'max:123');
@@ -128,6 +130,54 @@ try {
  assert.equal((await call(`/api/reviews/${review.body.id}/report`,tg,'POST',{reason:'Повтор'})).status,409);
  assert.equal((await call('/api/me',max,'PATCH',{shareContact:false})).status,200);
  assert.equal((await call('/api/profiles/max:123',tg)).body.contact,null,'owner can revoke contact visibility despite shared meeting');
- console.log('PASS: nicknames, friend approvals/removal, contact consent, online links, review eligibility/rating/reports; profile editing, platform/custom avatars, age gates, archive; MAX → Telegram shared activity, approval, address privacy, access controls, age, stale/tampered/duplicate signatures, production demo lockout');
+ assert.equal((await call('/api/me',tg)).body.user.nickname,'ira_guest','nickname survives reload');
+ const withUsername=signed('telegram',123,{user:JSON.stringify({id:123,first_name:'Telegram',username:'auto_name'})});
+ await call('/api/me',tg,'PATCH',{telegramContact:''});
+ assert.equal((await call('/api/me',withUsername)).body.user.telegramContact,'','intentionally cleared contact must not be reimported');
+ await call('/api/me',tg,'PATCH',{telegramContact:'guest_name'});
+ assert.equal((await call('/api/me',tg)).body.user.telegramContact,'guest_name','contact survives reload');
+ assert.equal((await call('/api/does-not-exist',tg)).status,404,'unknown routes return JSON');
+ assert.equal((await call('/api/moderation',tg)).status,403);
+ assert.equal((await call('/api/moderation',outsider)).status,200);
+ const activityPayload={title:'Спокойный бадминтон',sport:'Бадминтон',date:new Date(Date.now()+86400000).toISOString(),district:'Сокол',publicPlace:'Парк',level:'any',capacity:4};
+ assert.equal((await call('/api/activities',max,'POST',{...activityPayload,title:'х.у.й'})).status,400);
+ assert.equal((await call('/api/me',tg,'PATCH',{bio:'Я тебя убью тебя'})).status,400);
+ assert.equal((await call('/api/activities',max,'POST',activityPayload)).status,201,'ordinary names must pass moderation');
+ const missingPlace=await call('/api/activities',max,'POST',{...activityPayload,district:'',publicPlace:''});
+ assert.equal(missingPlace.status,400);assert.ok(missingPlace.body.message.includes('район'));assert.equal(missingPlace.body.message.includes('publicPlace'),false);
+ assert.equal((await call('/api/reports',tg,'POST',{kind:'activity',targetId:online.body.id,reason:'Нарушение в описании'})).status,201);
+ let queue=(await call('/api/moderation',outsider)).body;
+ const activityReport=queue.find(item=>item.kind==='activity'&&item.targetId===online.body.id);
+ assert.equal((await call(`/api/moderation/${activityReport.id}`,tg,'PATCH',{action:'hide'})).status,403);
+ assert.equal((await call(`/api/moderation/${activityReport.id}`,outsider,'PATCH',{action:'hide'})).status,200);
+ assert.equal((await call('/api/activities',tg)).body.some(item=>item.id===online.body.id),false);
+ assert.equal((await call(`/api/activities/${online.body.id}`)).status,404);
+ assert.equal((await call(`/api/moderation/${activityReport.id}`,outsider,'PATCH',{action:'restore'})).status,200);
+ assert.equal((await call('/api/activities',tg)).body.some(item=>item.id===online.body.id),true);
+ queue=(await call('/api/moderation',outsider)).body;
+ const reviewReport=queue.find(item=>item.kind==='review'&&item.targetId===review.body.id);
+ assert.equal((await call(`/api/moderation/${reviewReport.id}`,outsider,'PATCH',{action:'hide'})).status,200);
+ assert.equal((await call('/api/profiles/telegram:123',max)).body.user.rating,undefined);
+ assert.equal((await call('/api/profiles/telegram:123',max)).body.eligibleActivities.some(item=>item.id===reverse.body.id),false,'hidden review must not allow a duplicate vote');
+ assert.equal((await call(`/api/moderation/${reviewReport.id}`,outsider,'PATCH',{action:'restore'})).status,200);
+ assert.equal((await call('/api/profiles/telegram:123',max)).body.user.rating,5);
+ assert.equal((await call('/api/reports',tg,'POST',{kind:'user',targetId:'max:123',reason:'Нарушение правил профиля'})).status,201);
+ queue=(await call('/api/moderation',outsider)).body;
+ const userReport=queue.find(item=>item.kind==='user'&&item.targetId==='max:123');
+ assert.equal((await call(`/api/moderation/${userReport.id}`,outsider,'PATCH',{action:'warn'})).status,200);
+ assert.ok((await call('/api/me',max)).body.user.moderationWarning);
+ assert.equal((await call(`/api/moderation/${userReport.id}`,outsider,'PATCH',{action:'clearwarning'})).status,200);
+ assert.equal((await call('/api/me',max)).body.user.moderationWarning,undefined);
+ assert.equal((await call(`/api/moderation/${userReport.id}`,outsider,'PATCH',{action:'suspend'})).status,200);
+ assert.equal((await call('/api/activities',max,'POST',activityPayload)).status,403);
+ assert.equal((await call('/api/profiles/max:123',tg)).status,404);
+ assert.equal((await call(`/api/moderation/${userReport.id}`,outsider,'PATCH',{action:'unsuspend'})).status,200);
+ assert.equal((await call('/api/profiles/max:123',tg)).status,200);
+ assert.equal((await call('/api/reports',tg,'POST',{kind:'user',targetId:'max:789',reason:'Проверка прав команды'})).status,201);
+ queue=(await call('/api/moderation',outsider)).body;
+ const protectedReport=queue.find(item=>item.targetId==='max:789');
+ assert.equal((await call(`/api/moderation/${protectedReport.id}`,outsider,'PATCH',{action:'suspend'})).status,400);
+ const persisted=JSON.parse(await readFile(dataFile,'utf8'));assert.ok(persisted.moderationLog.length>=7);
+ console.log('PASS: API version, profile persistence, moderation checks, protected queue, hide/restore, warning, ban/unban, rating recalculation; nicknames, friend approvals/removal, contact consent, online links, review eligibility/rating/reports; profile editing, platform/custom avatars, age gates, archive; MAX → Telegram shared activity, approval, address privacy, access controls, age, stale/tampered/duplicate signatures, production demo lockout');
 } catch(error){ console.error(logs);throw error; }
 finally {child.kill();await new Promise(r=>child.once('exit',r));await unlink(dataFile).catch(()=>{});}

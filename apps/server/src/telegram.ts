@@ -35,7 +35,7 @@ export function startTelegramBot(): (() => void) | undefined {
   const run = async () => {
     try {
       await telegram("setMyCommands", { commands: [
-        { command: "start", description: "Открыть Сходку" }, { command: "help", description: "Помощь" }, { command: "support", description: "Поддержать проект" },
+        { command: "start", description: "Открыть Сходку" }, { command: "help", description: "Помощь" }, { command: "support", description: "Поддержать проект" }, {command:"id",description:"Мой ID для поддержки"},
       ] }, controller.signal);
     } catch { console.error("Не удалось настроить команды Telegram"); }
     while (!controller.signal.aborted) {
@@ -43,7 +43,8 @@ export function startTelegramBot(): (() => void) | undefined {
         const updates = await telegram<Update[]>("getUpdates", { offset, timeout: 25, allowed_updates: ["message"] }, controller.signal);
         for (const update of updates) {
           const message = update.message;
-          if (message?.chat.type === "private" && /^\/(start|help|support)(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
+          if (message?.chat.type === "private" && /^\/(start|help|support|id)(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
+            if (/^\/id(?:@\w+)?(?:\s|$)/.test(message.text??"")) {await telegram("sendMessage",{chat_id:message.chat.id,text:`Ваш ID СХОДКИ: telegram:${message.chat.id}`},controller.signal);offset=update.update_id+1;continue;}
             if (/^\/support(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
               await telegram("sendMessage", { chat_id: message.chat.id, text: "«СХОДКА» бесплатна. Добровольная поддержка поможет нам оплачивать сервер и развивать приложение 💚\nСпособ оплаты пока готовим — никаких переводов сейчас делать не нужно." }, controller.signal);
               offset = update.update_id + 1; continue;

@@ -5,6 +5,7 @@ services:
       dockerfile: apps/server/Dockerfile
     environment:
       DATABASE_URL: ${DATABASE_URL:-}
+      MODERATOR_USER_IDS: ${MODERATOR_USER_IDS:-}
       NODE_ENV: production
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_POLLING_ENABLED: ${TELEGRAM_BOT_POLLING_ENABLED:-false}

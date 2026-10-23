@@ -231,3 +231,15 @@ button.participant-chip { border:0; text-align:left; font:inherit; color:inherit
 .public-review > .history-note { display:block; }
 .review-form { margin:20px 0; padding-top:10px; border-top:1px solid #edf0ed; }
 .contact-organizer { margin:0 0 12px; }
+.mine-sections { display:flex; gap:7px; margin:0 0 18px; padding:5px; background:#edf2e7; border-radius:14px; }
+.mine-sections button { flex:1; padding:11px 8px; border:0; border-radius:10px; background:none; color:#69766d; font-size:13px; }
+.mine-sections button.active { background:white; color:#17251d; font-weight:650; }
+.mine-sections button span { display:inline-block; min-width:19px; padding:2px 5px; border-radius:12px; background:#e3f4b5; color:#354618; margin-left:4px; font-size:11px; }
+.report-button { display:block; margin:14px 0; font-size:12px; color:#69766d; }
+.moderation-report { padding:16px; border:1px solid #e0e5df; border-radius:18px; background:white; margin:14px 0; }
+.moderation-report h3 { font-size:16px; overflow-wrap:anywhere; }
+.moderation-report p { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.moderation-report > strong { font-size:12px; color:#69766d; }
+.reported-content { padding:12px; background:#f3f6ef; border-radius:10px; white-space:pre-wrap; }
+.moderation-actions { display:flex; flex-wrap:wrap; gap:8px; padding-top:8px; }
+.moderation-actions button { font-size:12px; }
