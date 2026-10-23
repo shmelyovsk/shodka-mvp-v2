@@ -17,6 +17,8 @@ export interface User {
   nickname?: string;
   telegramContact?: string;
   shareContact?: boolean;
+  suspended?: boolean;
+  moderationWarning?: string;
   rating?: number;
   reviewsCount?: number;
 }
@@ -31,6 +33,7 @@ export interface Activity {
   format?: "offline" | "online";
   connectionLink?: string;
   gamePlatform?: string;
+  moderationHidden?: boolean;
   district: string;
   publicPlace: string;
   exactAddress: string;
@@ -63,8 +66,13 @@ export interface Database {
   friendships?: Friendship[];
   reviews?: Review[];
   reviewReports?: ReviewReport[];
+  contentReports?: ContentReport[];
+  moderationLog?: ModerationAction[];
 }
 
 export interface Friendship { id: string; from: string; to: string; status: "pending" | "accepted"; createdAt: string }
-export interface Review { id: string; activityId: string; authorId: string; targetId: string; score: number; text: string; createdAt: string; attended: true }
+export interface Review { id: string; activityId: string; authorId: string; targetId: string; score: number; text: string; createdAt: string; attended: true; hidden?: boolean }
 export interface ReviewReport { id: string; reviewId: string; reporterId: string; reason: string; createdAt: string }
+
+export interface ContentReport { id:string; kind:"activity"|"user"|"review"; targetId:string; reporterId:string; reason:string; createdAt:string; status:"open"|"resolved"; resolution?:string }
+export interface ModerationAction { id:string; reportId:string; moderatorId:string; action:string; createdAt:string }
