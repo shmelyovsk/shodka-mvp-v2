@@ -3,7 +3,7 @@ export interface Activity {
   title: string;
   sport: string;
   date: string;
-  durationMinutes: number;
+  durationMinutes?: number;
   district: string;
   publicPlace: string;
   exactAddress?: string;
@@ -23,6 +23,7 @@ export interface Activity {
     age: number;
     ageGroup: string;
     avatarUrl?: string;
+    bio?: string;
     rating?: number;
     reviewsCount?: number;
   };

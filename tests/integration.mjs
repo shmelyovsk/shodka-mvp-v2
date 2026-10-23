@@ -2,15 +2,16 @@ import assert from 'node:assert/strict';
 import { createHmac, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { unlink } from 'node:fs/promises';
+import { unlink, readFile, writeFile } from 'node:fs/promises';
 const base = 'http://127.0.0.1:3197';
 const dataFile = join(process.cwd(), `shodka-test-${randomUUID()}.json`);
-const mock = `const real = globalThis.fetch; globalThis.fetch = (url, options) => String(url).startsWith('https://') ? Promise.resolve(new Response(JSON.stringify({ok:true,result:[],user_id:1,first_name:'Bot',is_bot:true}))) : real(url,options);`;
+const mock = `const real = globalThis.fetch; globalThis.fetch = (url, options) => String(url).startsWith('https://') ? (String(url).includes('api.telegram.org') && String(url).endsWith('/sendMessage') && console.log('TELEGRAM_MESSAGE_SENT'), Promise.resolve(new Response(JSON.stringify({ok:true,result:[],user_id:1,first_name:'Bot',is_bot:true})))) : real(url,options);`;
 const child = spawn(process.execPath, ['--import', 'data:text/javascript,' + encodeURIComponent(mock), 'apps/server/dist/index.js'], {
   env: {...process.env, PORT:'3197', DATA_FILE:dataFile, NODE_ENV:'production', DEMO_MODE:'true',
     MAX_BOT_TOKEN:'max-test', TELEGRAM_BOT_TOKEN:'telegram-test', MAX_BOT_POLLING_ENABLED:'false', TELEGRAM_BOT_POLLING_ENABLED:'false'},
   stdio:['ignore','pipe','pipe'],
 });
+let botOutput=''; child.stdout.on('data', data => botOutput += data);
 let logs=''; child.stderr.on('data', data => logs += data);
 function signed(platform,id,extra={}) {
   const params=new URLSearchParams({auth_date:String(Math.floor(Date.now()/1000)),user:JSON.stringify({id,first_name:platform}),...extra});
@@ -29,7 +30,20 @@ try {
  const max=signed('max',123),tg=signed('telegram',123);
  assert.equal((await call('/api/me',max)).body.user.id,'max:123');
  assert.equal((await call('/api/me',tg)).body.user.id,'telegram:123');
+ assert.equal((await call('/api/users/telegram:123/activities',tg)).status,200, 'history is readable without age');
+ assert.equal((await call('/api/activities',tg,'POST',{})).status,403, 'creating requires age');
  assert.equal((await call('/api/me',tg,'PATCH',{age:15})).status,400);
+ const platformPhoto = signed('telegram',123,{user:JSON.stringify({id:123,first_name:'Telegram',photo_url:'https://example.com/avatar.jpg'})});
+ assert.equal((await call('/api/me',platformPhoto)).body.user.avatarUrl,'https://example.com/avatar.jpg');
+ const photo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS8sAAAAASUVORK5CYII=';
+ assert.equal((await call('/api/me',tg,'PATCH',{name:'Ира',bio:'Люблю бег',sports:['Бег'],district:'Сокол',avatarUrl:photo,notificationsEnabled:false})).status,200);
+ const refreshed=(await call('/api/me',platformPhoto)).body.user;
+ assert.equal(refreshed.name,'Ира'); assert.equal(refreshed.bio,'Люблю бег'); assert.equal(refreshed.avatarUrl,photo); assert.equal(refreshed.notificationsEnabled,false);
+ assert.equal((await call('/api/me',tg,'PATCH',{name:'Changed',age:14})).status,400);
+ assert.equal((await call('/api/me',tg)).body.user.name,'Ира','invalid patch must be atomic');
+ assert.equal((await call('/api/me',tg,'PATCH',{avatarUrl:'javascript:alert(1)'})).status,400);
+ assert.equal((await call('/api/me',platformPhoto,'PATCH',{usePlatformAvatar:true})).status,200);
+ assert.equal((await call('/api/me',platformPhoto)).body.user.avatarUrl,'https://example.com/avatar.jpg');
  for(const headers of [max,tg]) assert.equal((await call('/api/me',headers,'PATCH',{age:20})).status,200);
  const created=await call('/api/activities',max,'POST',{title:'Cross platform',sport:'Бег',date:new Date(Date.now()+86400000).toISOString(),district:'Сокол',publicPlace:'Парк',exactAddress:'SECRET ADDRESS',level:'any',capacity:2});
  assert.equal(created.status,201);const id=created.body.id;
@@ -40,6 +54,8 @@ try {
  assert.equal((await call(`/api/applications/${applied.body.id}`,tg,'PATCH',{status:'approved'})).status,403);
  assert.equal((await call(`/api/applications/${applied.body.id}`,max,'PATCH',{status:'approved'})).status,200);
  assert.equal((await call(`/api/activities/${id}`,tg)).body.exactAddress,'SECRET ADDRESS');
+ assert.equal(botOutput.includes('TELEGRAM_MESSAGE_SENT'),false,'disabled Telegram notifications must not send');
+ assert.equal((await call(`/api/activities/${id}`,tg)).body.organizer.notificationsEnabled,undefined,'public profiles must not expose preferences');
  assert.equal((await call(`/api/activities/${id}`)).body.exactAddress,undefined);
  const tampered={...tg,'x-init-data':tg['x-init-data'].replace('telegram','impostor')};
  assert.equal((await call('/api/me',tampered)).status,401);
@@ -52,7 +68,19 @@ try {
  assert.equal((await call(`/api/applications/${applied.body.id}`,max,'PATCH',{status:'rejected'})).status,200);
  assert.equal((await call(`/api/activities/${id}`,tg)).body.exactAddress,undefined);
  assert.equal((await call(`/api/activities/${id}`,max)).body.status,'open');
+ assert.equal((await call('/api/me',tg,'PATCH',{notificationsEnabled:true})).status,200);
+ assert.equal((await call(`/api/applications/${applied.body.id}`,max,'PATCH',{status:'approved'})).status,200);
+ await new Promise(resolve=>setTimeout(resolve,50));
+ assert.equal(botOutput.includes('TELEGRAM_MESSAGE_SENT'),true,'enabled notifications must send');
  assert.equal((await call(`/api/activities/${id}/cancel`,max,'POST',{})).status,200);
- console.log('PASS: MAX → Telegram shared activity, approval, address privacy, access controls, age, stale/tampered/duplicate signatures, production demo lockout');
+ const db=JSON.parse(await readFile(dataFile,'utf8'));
+ db.activities.find(item=>item.id===reverse.body.id).date=new Date(Date.now()-86400000*2).toISOString();
+ await writeFile(dataFile,JSON.stringify(db));
+ const history=(await call('/api/users/telegram:123/activities',tg)).body;
+ assert.ok(history.some(item=>item.id===id && item.status==='cancelled'),'cancelled activity remains in history');
+ assert.ok(history.some(item=>item.id===reverse.body.id),'past activity remains in history');
+ assert.equal((await call('/api/activities',tg)).body.some(item=>item.id===reverse.body.id),false);
+ assert.equal((await call(`/api/activities/${reverse.body.id}/applications`,max,'POST',{})).status,409);
+ console.log('PASS: profile editing, platform/custom avatars, age gates, archive; MAX → Telegram shared activity, approval, address privacy, access controls, age, stale/tampered/duplicate signatures, production demo lockout');
 } catch(error){ console.error(logs);throw error; }
 finally {child.kill();await new Promise(r=>child.once('exit',r));await unlink(dataFile).catch(()=>{});}
