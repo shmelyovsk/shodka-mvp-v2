@@ -12,13 +12,15 @@ import { StorageConflict } from "./postgres.js";
 import { installSocialRoutes, publicProfile, visibleActivity } from "./social.js";
 import type { Activity, SkillLevel, User } from "./types.js";
 
+import { installSupportRoutes } from "./support.js";
+
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json({ limit: "600kb" }));
 const API_VERSION = 4;
-app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation"],release:"social-moderation-v4"}));
+app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support"],release:"support-v4"}));
 app.use("/api",(_req,res,next)=>{res.setHeader("Cache-Control","no-store");next();});
 const resolvedUsers = new WeakMap<express.Request, string>();
 // Serialize API operations in this process; PostgreSQL versions also protect across processes.
@@ -131,6 +133,7 @@ app.patch("/api/me", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 installModerationRoutes(app, userIdFromRequest);
+installSupportRoutes(app, userIdFromRequest);
 installSocialRoutes(app, userIdFromRequest);
 
 app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegramConnectionStatus()); });
@@ -164,7 +167,7 @@ function ageLimitLabel(minAge?: number, maxAge?: number): string {
 }
 
 app.get("/health", async (_req, res) => {
-  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"social-moderation-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
+  try { await checkDatabase(); res.json({ status: "ok", service: "shodka-api", apiVersion:API_VERSION, release:"support-v4", commit:process.env.RENDER_GIT_COMMIT?.slice(0,7), storage: storageKind }); }
   catch { res.status(503).json({ status: "unavailable", service: "shodka-api", storage: storageKind }); }
 });
 

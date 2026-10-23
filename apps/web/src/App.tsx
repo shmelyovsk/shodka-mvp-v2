@@ -1,5 +1,6 @@
 import { FormEvent, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, DEFAULT_USER_ID, type Profile } from "./api";
+import { SupportView } from "./SupportView";
 import { ModerationView } from "./ModerationView";
 import { FriendsView } from "./FriendsView";
 import { PublicProfileModal } from "./PublicProfileModal";
@@ -9,7 +10,7 @@ import { NavIcon } from "./NavIcon";
 import { activityPhase, inHistoryTab, type HistoryTab } from "./history";
 import type { Activity, OrganizerApplication } from "./types";
 
-type Tab = "catalog" | "create" | "requests" | "mine" | "profile" | "friends" | "moderation";
+type Tab = "catalog" | "create" | "requests" | "mine" | "profile" | "friends" | "moderation" | "support";
 type DateFilter = "all" | "today" | "tomorrow" | "week";
 
 const ProfileOpener = createContext<(id: string) => void>(() => {});
@@ -333,7 +334,7 @@ function App() {
     <ProfileOpener.Provider value={setViewedUser}>
     <div className="app-shell">
       <header className="site-header">
-        {(tab === "profile" || tab === "moderation") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва <span className="age-mark">· 16+</span></span>}
+        {(tab === "profile" || tab === "moderation" || tab === "support") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <span className="city-label">Москва <span className="age-mark">· 16+</span></span>}
         <button className="profile-button" aria-label="Открыть личный кабинет" aria-current={tab === "profile" ? "page" : undefined} onClick={() => navigate("profile")}>
           <PersonAvatar name={demo ? (currentUserId === "user-1" ? "Ира" : "Саша") : profile.name} avatarUrl={demo ? undefined : profile.avatarUrl} size="large" />
         </button>
@@ -347,10 +348,11 @@ function App() {
 
       <main>
         {(profile.moderationWarning||profile.suspended)&&<div className="notice" role="alert">{profile.suspended?"Ваш аккаунт ограничен модерацией. Публикации и заявки недоступны.":profile.moderationWarning}</div>}
+        {tab === "support" && moderator && <SupportView currentUserId={currentUserId}/>}
         {tab === "moderation" && moderator && <ModerationView currentUserId={currentUserId} onChanged={()=>void loadActivities(false)}/>}
         {(tab==="mine"||tab==="requests")&&<div className="mine-sections"><button className={tab==="mine"?"active":""} onClick={()=>setTab("mine")}>Мои встречи</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Заявки ко мне <span>{applications.filter(item=>item.status==="pending"&&item.activity?.status!=="cancelled"&&new Date(item.activity?.date??0).getTime()>clock).length}</span></button></div>}
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}
-        {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} moderator={moderator} onModeration={()=>navigate("moderation")} />}
+        {tab === "profile" && <ProfileView key={currentUserId} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryTab("past"); navigate("mine"); }} moderator={moderator} onSupport={()=>navigate("support")} onModeration={()=>navigate("moderation")} />}
 
         {tab === "friends" && <FriendsView key={viewedUser??"friends"} currentUserId={currentUserId} onProfile={setViewedUser}/>}
 

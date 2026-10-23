@@ -60,6 +60,8 @@ export interface Application {
 }
 
 export interface Database {
+  supportTickets?: SupportTicket[];
+  supportDrafts?: Record<string, "problem" | "idea">;
   users: User[];
   activities: Activity[];
   applications: Application[];
@@ -76,3 +78,5 @@ export interface ReviewReport { id: string; reviewId: string; reporterId: string
 
 export interface ContentReport { id:string; kind:"activity"|"user"|"review"; targetId:string; reporterId:string; reason:string; createdAt:string; status:"open"|"resolved"; resolution?:string }
 export interface ModerationAction { id:string; reportId:string; moderatorId:string; action:string; createdAt:string }
+
+export interface SupportTicket { id:string; userId:string; kind:"problem"|"idea"; text:string; createdAt:string; status:"new"|"working"|"resolved"; sourceMessageId:number; attachment?:{fileId:string;kind:"photo"|"document"}; replies:{id:string;text:string;moderatorId:string;createdAt:string;delivery:"pending"|"sent"|"failed"}[]; changes?:{moderatorId:string;status:string;createdAt:string}[] }
