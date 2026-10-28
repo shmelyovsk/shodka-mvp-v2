@@ -12,7 +12,7 @@ import { StorageConflict } from "./postgres.js";
 import { installSocialRoutes, publicProfile, visibleActivity } from "./social.js";
 import type { Activity, SkillLevel, User } from "./types.js";
 
-import { installContactRoutes, syncTelegramContact, verifiedContact, CONTACT_REQUIRED } from "./contacts.js";
+import { installContactRoutes, syncTelegramContact, verifiedContact, missingProfileFields, CONTACT_REQUIRED } from "./contacts.js";
 import { installSupportRoutes } from "./support.js";
 
 import { installLifecycleRoutes, terminal, inFeed } from "./lifecycle.js";
@@ -244,7 +244,7 @@ app.get("/api/activities/:id", async (req, res, next) => {
 app.post("/api/activities", async (req, res, next) => {
   try {
     const organizerId = userIdFromRequest(req);
-    if(!verifiedContact((await readDatabase()).users.find(u=>u.id===organizerId)))return res.status(400).json({message:CONTACT_REQUIRED});
+    const profileMissing=missingProfileFields((await readDatabase()).users.find(u=>u.id===organizerId));if(profileMissing.length)return res.status(400).json({message:"Заполните профиль: "+profileMissing.join(", "),code:"PROFILE_INCOMPLETE",missing:profileMissing});
     const category = req.body.category ?? "sport";
     const format = req.body.format ?? "offline";
     if (!["sport", "games"].includes(category) || !["offline", "online"].includes(format)) return res.status(400).json({ message: "Проверьте категорию и формат" });
@@ -334,7 +334,7 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     if (activity.organizerId === userId) return res.status(409).json({ message: "Организатор уже участвует" });
     const user = db.users.find((item) => item.id === userId);
     if (!user) return res.status(404).json({ message: "Профиль пользователя не найден" });
-    if(!verifiedContact(user))return res.status(400).json({message:CONTACT_REQUIRED});
+    const profileMissing=missingProfileFields(user);if(profileMissing.length)return res.status(400).json({message:"Заполните профиль: "+profileMissing.join(", "),code:"PROFILE_INCOMPLETE",missing:profileMissing});
     if(!verifiedContact(db.users.find(u=>u.id===activity.organizerId)))return res.status(409).json({message:"Организатору нужно подтвердить Telegram-контакт в профиле перед приёмом заявок"});
     if (activity.minAge !== undefined && user.age < activity.minAge) {
       return res.status(409).json({ message: `Для этой сходки установлен возраст от ${activity.minAge} лет` });
