@@ -10,7 +10,7 @@
     "build": "npm run build --workspace @shodka/server && npm run build --workspace @shodka/web",
     "start": "npm run start --workspace @shodka/server",
     "typecheck": "npm run typecheck --workspace @shodka/server && npm run typecheck --workspace @shodka/web",
-    "test": "npm run build && node tests/integration.mjs && node tests/history.mjs && node tests/client-api.mjs && node tests/bot-commands.mjs && node tests/support.mjs && node tests/contacts.mjs && node tests/meetups.mjs && node tests/reminders.mjs && node tests/text-filter.mjs && node tests/legacy-filter.mjs",
+    "test": "npm run build && node tests/integration.mjs && node tests/history.mjs && node tests/client-api.mjs && node tests/bot-commands.mjs && node tests/support.mjs && node tests/contacts.mjs && node tests/meetups.mjs && node tests/reminders.mjs && node tests/text-filter.mjs && node tests/legacy-filter.mjs && node tests/profile-gate.mjs",
     "test:postgres": "npm run build --workspace @shodka/server && node tests/postgres.mjs"
   },
   "engines": {

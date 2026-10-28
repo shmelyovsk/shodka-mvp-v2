@@ -47,6 +47,10 @@ export async function api<T>(path: string, options: RequestInit = {}, userId = D
   }); }catch{throw new Error("Не удалось связаться с сервером. Попробуйте ещё раз");}
   if(!response.headers.get("content-type")?.includes("application/json")) throw new Error(response.status>=500?"Сервер временно недоступен. Попробуйте позже":VERSION_MESSAGE);
   const body=await response.json().catch(()=>{throw new Error("Сервер вернул некорректный ответ. Попробуйте позже");});
-  if(!response.ok)throw new Error(body.message??"Не удалось выполнить запрос");
+  if(!response.ok){
+    const raw=typeof body.message==="string"?body.message:"Не удалось выполнить запрос";
+    const safe=/Unexpected token|DOCTYPE|not valid JSON|ECONN|TypeError|SELECT |INSERT |UPDATE /i.test(raw)?"Не удалось выполнить действие. Попробуйте ещё раз":raw.replace(/\bdistrict\b/g,"район или метро").replace(/\bpublicPlace\b/g,"место встречи").replace(/\bcapacity\b/g,"число участников").replace(/\bdate\b/g,"дата и время");
+    throw new Error(safe);
+  }
   return body as T;
 }
