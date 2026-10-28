@@ -1,5 +1,7 @@
 import "./config.js";
 import cors from "cors";
+import {blockedBetween,installBlockRoutes} from "./blocks.js";
+import {installAfterMeetingRoutes} from "./after-meetings.js";
 import express from "express";
 import { nanoid } from "nanoid";
 import { readDatabase, writeDatabase, closeDatabase, checkDatabase, storageKind } from "./store.js";
@@ -25,7 +27,7 @@ const port = Number(process.env.PORT ?? 3000);
 app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json({ limit: "600kb" }));
 const API_VERSION = 4;
-app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support","verifiedContacts","meetupLifecycle","communityFilter"],release:"community-v4"}));
+app.get("/api/capabilities", (_req,res)=>res.set("Cache-Control","no-store").json({apiVersion:API_VERSION,features:["profiles","friends","games","reviews","moderation","support","verifiedContacts","meetupLifecycle","communityFilter","blocking","afterMeetingFeedback"],release:"community-v4"}));
 app.use("/api",(_req,res,next)=>{res.setHeader("Cache-Control","no-store");next();});
 const resolvedUsers = new WeakMap<express.Request, string>();
 // Serialize API operations in this process; PostgreSQL versions also protect across processes.
@@ -61,7 +63,7 @@ app.use("/api", (req, res, next) => {
       const publicRead = req.method === "GET" && (
         /^\/activities(?:\/[^/]+)?$/.test(req.path) || /^\/(max|telegram)\/status$/.test(req.path));
       if (!publicRead && !userId) return void res.status(401).json({ message: "Откройте Сходку через бота MAX или Telegram" });
-      if (userId && req.method !== "GET" && req.path !== "/me" && !req.path.startsWith("/favorites") && req.path !== "/telegram-link") {
+      if (userId && req.method !== "GET" && req.path !== "/me" && !req.path.startsWith("/favorites") && req.path !== "/telegram-link" && !req.path.startsWith("/blocks")) {
         const db = await readDatabase();
         const user = db.users.find(item => item.id === userId);
         if (!user || user.age < 16) return void res.status(403).json({ message: "Сначала укажите возраст в профиле (16+)" });
@@ -132,6 +134,8 @@ installModerationRoutes(app, userIdFromRequest);
 installSupportRoutes(app, userIdFromRequest);
 installContactRoutes(app, userIdFromRequest);
 installSocialRoutes(app, userIdFromRequest);
+installBlockRoutes(app,userIdFromRequest);
+installAfterMeetingRoutes(app,userIdFromRequest);
 installLifecycleRoutes(app, userIdFromRequest);
 
 app.get("/api/telegram/status", async (_req, res) => { res.json(await getTelegramConnectionStatus()); });
@@ -331,6 +335,7 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     if (new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка уже прошла" });
     if (activity.moderationHidden || db.users.find(user=>user.id===activity.organizerId)?.suspended) return res.status(409).json({message:"Сходка скрыта модерацией"});
     if (activity.status !== "open") return res.status(409).json({ message: "Набор уже закрыт" });
+    if(blockedBetween(db,userId,activity.organizerId))return res.status(403).json({message:"Подача заявки этому организатору недоступна"});
     if (activity.organizerId === userId) return res.status(409).json({ message: "Организатор уже участвует" });
     const user = db.users.find((item) => item.id === userId);
     if (!user) return res.status(404).json({ message: "Профиль пользователя не найден" });
@@ -418,6 +423,7 @@ app.patch("/api/applications/:id", async (req, res, next) => {
     if (!application) return res.status(404).json({ message: "Заявка не найдена" });
     const activity = db.activities.find((item) => item.id === application.activityId);
     if (!activity || activity.organizerId !== organizerId) return res.status(403).json({ message: "Недостаточно прав" });
+    if(status==="approved"&&blockedBetween(db,organizerId,application.userId))return res.status(403).json({message:"Одобрение недоступно: между пользователями действует блокировка"});
     if(application.status==="withdrawn")return res.status(409).json({message:"Участник отозвал заявку. Дождитесь новой заявки"});
     if (terminal(activity) || new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка завершена или отменена" });
     if(status==="approved"&&(!verifiedContact(db.users.find(u=>u.id===organizerId))||!verifiedContact(db.users.find(u=>u.id===application.userId))))return res.status(409).json({message:"Перед одобрением организатор и участник должны подтвердить Telegram-контакты в профиле"});

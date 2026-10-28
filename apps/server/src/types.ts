@@ -62,6 +62,8 @@ export interface Application {
 }
 
 export interface Database {
+  blocks?: {from:string;to:string;createdAt:string}[];
+  meetingFeedback?: {activityId:string;userId:string;met:boolean;createdAt:string}[];
   favorites?: {userId:string;activityId:string;createdAt:string}[];
   reminderDeliveries?: {key:string;activityId:string;userId:string;window:"day"|"hour";state:"sending"|"sent"|"failed"|"skipped";claimedAt:string;attempts:number}[];
   telegramLinks?: {hash:string;userId:string;expiresAt:string}[];

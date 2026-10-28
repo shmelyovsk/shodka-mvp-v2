@@ -47,3 +47,10 @@
 .skeleton-card{display:grid;gap:14px;padding:22px;border:var(--line);border-radius:20px;margin:14px 3px 18px 0;background:var(--paper)}
 .skeleton-card i{display:block;height:13px;width:80%;border-radius:8px;background:var(--blue);opacity:.55}
 .skeleton-card i:first-child{width:44%;height:22px}.skeleton-card i:last-child{width:60%}
+
+.meeting-feedback{padding:20px;margin:20px 3px 24px 0;border:var(--line);border-radius:20px;background:var(--blue);box-shadow:var(--shadow)}
+.meeting-feedback h3{margin:10px 0;font-size:19px}.meeting-feedback p{font-size:13px;line-height:1.7}.meeting-feedback .history-note{font-size:11px;margin:10px 0 16px}
+.feedback-person,.blocked-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-top:var(--line)}
+.feedback-person strong,.blocked-row strong{font-size:13px;overflow-wrap:anywhere}.feedback-person .secondary,.blocked-row .secondary{font-size:11px;flex-shrink:0;padding:10px 12px}
+.blocked-row>span{min-width:0}.blocked-row small{display:block;font-size:11px;margin-top:5px;overflow-wrap:anywhere}
+.block-controls{border-top:var(--line);border-bottom:var(--line);padding:14px 0;margin:24px 0}.block-controls .notification-toggle{margin:10px 0}
