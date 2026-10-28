@@ -1,4 +1,5 @@
 import "./config.js";
+import {DONATION_URL,DONATION_BUTTON,DONATION_TEXT} from "./donations.js";
 import { acceptTelegramLink, refreshTelegramContacts } from "./contacts.js";
 import { handleSupportMessage, type SupportMessage } from "./support.js";
 
@@ -51,7 +52,7 @@ export function startTelegramBot(): (() => void) | undefined {
           if (message?.chat.type === "private" && /^\/(start|help|support|id)(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
             if (/^\/id(?:@\w+)?(?:\s|$)/.test(message.text??"")) {await telegram("sendMessage",{chat_id:message.chat.id,text:`Ваш ID СХОДКИ: telegram:${message.chat.id}`},controller.signal);offset=update.update_id+1;continue;}
             if (/^\/support(?:@\w+)?(?:\s|$)/.test(message.text ?? "")) {
-              await telegram("sendMessage", { chat_id: message.chat.id, text: "«СХОДКА» бесплатна. Добровольная поддержка поможет нам оплачивать сервер и развивать приложение 💚\nСпособ оплаты пока готовим — никаких переводов сейчас делать не нужно." }, controller.signal);
+              await telegram("sendMessage", { chat_id: message.chat.id, text:DONATION_TEXT, reply_markup:{inline_keyboard:[[{text:DONATION_BUTTON,url:DONATION_URL}]]} }, controller.signal);
               offset = update.update_id + 1; continue;
             }
             let url = process.env.MINI_APP_URL?.trim();
