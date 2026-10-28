@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
+import { BlockedUsers } from "./BlockedUsers";
 import { Icon } from "./Icon";
 import { api, type Profile } from "./api";
 
@@ -78,6 +79,7 @@ export function ProfileView({ profile, organized, applications, onSave, onHistor
       {message && <p className="account-feedback" role="status">{message}</p>}
     </form>}
     {!editing&&<section className="account-history"><h2>Ваша история</h2><div className="account-stats"><div><strong>{organized}</strong><span>Организовано</span></div><div><strong>{applications}</strong><span>Заявок на встречи</span></div></div><button className="secondary full" onClick={onHistory}>Посмотреть мои сходки</button><p className="account-caption">Заявка не подтверждает фактическое посещение встречи.</p></section>}
+    {!editing&&<BlockedUsers currentUserId={profile.id}/>}
     {!editing&&moderator&&<button className="secondary full friends-entry" onClick={onSupport}>Обращения: проблемы и идеи →</button>}
     {!editing&&moderator&&<button className="secondary full friends-entry" onClick={onModeration}>Модерация и жалобы →</button>}
 

@@ -5,6 +5,7 @@ export interface PublicUser {
 export interface Friend { id: string; status: "pending" | "accepted"; incoming: boolean; user: PublicUser }
 export interface PublicReview { id: string; score: number; text: string; createdAt: string; authorId: string; author?: PublicUser }
 export interface ProfileDetails {
+  blockedByMe?:boolean; interactionBlocked?:boolean; excludableActivities?:Array<{id:string;title:string}>;
   user: PublicUser; contact: { telegram: string } | null;
   friendship: { id: string; status: "pending" | "accepted"; incoming: boolean } | null;
   activities: import("./types").Activity[]; reviews: PublicReview[];

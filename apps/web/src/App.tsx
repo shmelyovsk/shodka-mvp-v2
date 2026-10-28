@@ -5,6 +5,7 @@ import { ModerationView } from "./ModerationView";
 import { FriendsView } from "./FriendsView";
 import { PublicProfileModal } from "./PublicProfileModal";
 import { CreateMeetup } from "./CreateMeetup";
+import { AfterMeetings } from "./AfterMeetings";
 import { Icon } from "./Icon";
 import { EmptyState, LoadingCards, LoadError } from "./Feedback";
 import { missingProfileFields } from "./profileCompletion";
@@ -141,6 +142,9 @@ function App() {
   const [favoritesOnly,setFavoritesOnly]=useState(false);
   const [shareUrl,setShareUrl]=useState("");
   const [actionBusy,setActionBusy]=useState(false);
+  const [joinGuidance,setJoinGuidance]=useState(false),[hintSeenUser,setHintSeenUser]=useState("");
+  const [reviewActivityId,setReviewActivityId]=useState<string>();
+  const [feedbackRevision,setFeedbackRevision]=useState(0);
   const [requestBusy,setRequestBusy]=useState(false);
   const [moderator,setModerator]=useState(false);
   const [viewedUser, setViewedUser] = useState<string | null>(null);
@@ -216,7 +220,7 @@ function App() {
   useEffect(()=>{if(authReady&&profile)void loadFavorites().catch(e=>setMessage(e.message));},[authReady,currentUserId]);
   useEffect(()=>{if(authReady&&profile){const id=new URLSearchParams(window.location.search).get("activity");if(id&&/^[A-Za-z0-9_-]{1,64}$/.test(id))void openActivity(id);}},[authReady,currentUserId]);
   async function toggleFavorite(id:string){if(favoriteBusy)return;setFavoriteBusy(true);try{await api('/api/favorites/'+id,{method:favorites.some(a=>a.id===id)?"DELETE":"PUT"},currentUserId);await loadFavorites();}catch(e){setMessage(e instanceof Error?e.message:"Не удалось сохранить");}finally{setFavoriteBusy(false);}}
-  async function finishActivity(outcome:"completed"|"not_held"){if(!selected||actionBusy||!window.confirm(outcome==="completed"?"Встреча состоялась? После завершения участники смогут оставить отзывы.":"Отметить, что встреча не состоялась? Отзывы будут недоступны."))return;setActionBusy(true);try{await api('/api/activities/'+selected.id+'/finish',{method:"POST",body:JSON.stringify({outcome})},currentUserId);setSelected(null);setMessage(outcome==="completed"?"Сходка завершена. Отзывы доступны в профилях участников.":"Отмечено: сходка не состоялась");await Promise.all([loadMine(),loadActivities(false),loadFavorites()]);}catch(e){setMessage(e instanceof Error?e.message:"Не удалось завершить встречу");}finally{setActionBusy(false);}}
+  async function finishActivity(outcome:"completed"|"not_held"){if(!selected||actionBusy||!window.confirm(outcome==="completed"?"Встреча состоялась? После завершения участники смогут оставить отзывы.":"Отметить, что встреча не состоялась? Отзывы будут недоступны."))return;setActionBusy(true);try{await api('/api/activities/'+selected.id+'/finish',{method:"POST",body:JSON.stringify({outcome})},currentUserId);setFeedbackRevision(v=>v+1);setSelected(null);setMessage(outcome==="completed"?"Сходка завершена. Отзывы доступны в профилях участников.":"Отмечено: сходка не состоялась");await Promise.all([loadMine(),loadActivities(false),loadFavorites()]);}catch(e){setMessage(e instanceof Error?e.message:"Не удалось завершить встречу");}finally{setActionBusy(false);}}
   async function leaveActivity(){if(!selected||actionBusy)return;const soon=Date.parse(selected.date)-Date.now()<3600000;if(!window.confirm(selected.applicationStatus==="pending"?"Отозвать заявку? Организатор получит уведомление.":soon?"Встреча начнётся менее чем через час. Точно отменить участие? Организатор получит уведомление.":"Отменить участие? Организатор получит уведомление, а ваше место освободится."))return;setActionBusy(true);try{await api('/api/activities/'+selected.id+'/leave',{method:"POST"},currentUserId);setSelected(null);setMessage("Участие отменено");await Promise.all([loadMine(),loadActivities(false)]);}catch(e){setMessage(e instanceof Error?e.message:"Не удалось отменить участие");}finally{setActionBusy(false);}}
   async function shareActivity(){if(!selected||actionBusy)return;setActionBusy(true);try{const {url}=await api<{url:string}>('/api/activities/'+selected.id+'/share',{},currentUserId);setShareUrl(url);if(navigator.share){try{await navigator.share({title:selected.title,url});}catch{/* The link remains available for manual copying. */}}else if(navigator.clipboard){await navigator.clipboard.writeText(url).catch(()=>{});}}catch(e){setMessage(e instanceof Error?e.message:"Не удалось получить ссылку");}finally{setActionBusy(false);}}
   async function loadMine(){setMineLoading(true);setMineError(false);try{setMine(await api<Activity[]>(`/api/users/${currentUserId}/activities`,{},currentUserId));}catch{setMineError(true);}finally{setMineLoading(false);}}
@@ -245,22 +249,26 @@ function App() {
 
   async function openActivity(id: string) {
     try {
-      setShareUrl("");
+      setShareUrl("");setJoinGuidance(false);
       setSelected(await api<Activity>(`/api/activities/${id}`, {}, currentUserId));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка загрузки");
     }
   }
 
-  async function joinActivity() {
-    if (!selected || !requireProfile({kind:"join",id:selected.id})) return;
+  async function joinActivity(understood=false) {
+    if (!selected || actionBusy || !requireProfile({kind:"join",id:selected.id})) return;
+    let seen=hintSeenUser===currentUserId;try{seen=seen||localStorage.getItem("shodka-first-application:"+currentUserId)==="1";}catch{}
+    if(!seen&&!understood){setJoinGuidance(true);return;}
+    if(understood){try{localStorage.setItem("shodka-first-application:"+currentUserId,"1");}catch{}setHintSeenUser(currentUserId);setJoinGuidance(false);}
+    setActionBusy(true);
     try {
       await api(`/api/activities/${selected.id}/applications`, { method: "POST" }, currentUserId);
       setMessage("Заявка отправлена организатору");
       setSelected(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось отправить заявку");
-    }
+    } finally {setActionBusy(false);}
   }
 
   async function createActivity(payload:Record<string,string>){
@@ -377,6 +385,7 @@ function App() {
         {tab === "create" && <CreateMeetup onPublish={createActivity}/>}
 
         {tab === "mine" && <section>
+          <AfterMeetings revision={feedbackRevision} currentUserId={currentUserId} onProfile={(id,activityId)=>{setReviewActivityId(activityId);setViewedUser(id);}}/>
           {(requestsLoading||requestsError||activeApplications.length>0)&&<details className="plans-requests" open={requestsOpen} onToggle={e=>setRequestsOpen(e.currentTarget.open)}><summary>{requestsLoading?"Проверяем заявки…":requestsError?"Не удалось проверить заявки":activeApplications.length?"Ждут твоего ответа":"Заявки ко мне"}{!requestsLoading&&!requestsError&&activeApplications.length>0&&<span className="count-badge">{activeApplications.length}</span>}<Icon name="chevron-down" size={18}/></summary>
           {requestsLoading?<LoadingCards/>:requestsError?<LoadError onRetry={()=>void loadApplications()}/>:activeApplications.length?<div className="compact-requests">{activeApplications.map(item=><article className="request-card" key={item.id}><button className="person-row" onClick={()=>setViewedUser(item.userId)}><PersonAvatar name={item.user?.name??"Участник"} avatarUrl={item.user?.avatarUrl}/><span><strong>{item.user?.name??"Участник"}</strong><small>Хочет на «{item.activity?.title}»</small></span></button><div className="request-actions"><button className="secondary" disabled={requestBusy} onClick={()=>void updateApplication(item.id,"rejected")}>Отклонить</button><button className="primary" disabled={requestBusy} onClick={()=>void updateApplication(item.id,"approved")}>Принять</button></div></article>)}</div>:<EmptyState title="Все заявки разобраны" text="Новые отклики на твои сходки появятся здесь. Принятые участники — в карточке встречи."/>}</details>}
           <div className="section-heading"><h2>Ближайшие планы</h2>{displayedMine.length>0&&<span className="count-badge">{displayedMine.length}</span>}</div>
@@ -429,11 +438,12 @@ function App() {
             {selected.organizerId===currentUserId&&!terminal(selected)&&Date.parse(selected.date)<=clock&&<div className="finish-actions"><p>Как прошла встреча?</p><button className="primary full" disabled={actionBusy} onClick={()=>void finishActivity("completed")}>Завершить: состоялась</button><button className="secondary full" disabled={actionBusy} onClick={()=>void finishActivity("not_held")}>Не состоялась</button></div>}
             {selected.organizerId!==currentUserId&&!terminal(selected)&&Date.parse(selected.date)>clock&&["approved","pending"].includes(selected.applicationStatus??"")&&<button className="secondary danger full" disabled={actionBusy} onClick={()=>void leaveActivity()}>{selected.applicationStatus==="pending"?"Отозвать заявку":"Отменить участие"}</button>}
             {selected.organizerId!==currentUserId&&<button className="text-button report-button" onClick={async()=>{const reason=window.prompt("Причина жалобы на сходку (до 500 символов)");if(!reason?.trim())return;try{await api("/api/reports",{method:"POST",body:JSON.stringify({kind:"activity",targetId:selected.id,reason})},currentUserId);setSelected(null);setMessage("Жалоба отправлена модераторам");}catch(error){setSelected(null);setMessage(error instanceof Error?error.message:"Не удалось отправить жалобу");}}}>Пожаловаться на сходку</button>}
-            {selected.organizerId !== currentUserId && <button className="primary full" disabled={actionBusy || selected.moderationHidden || selected.status !== "open" || new Date(selected.date).getTime() <= clock || ["pending","approved","rejected"].includes(selected.applicationStatus??"")} onClick={() => void joinActivity()}>{selected.applicationStatus==="approved"?"Вы участвуете":selected.applicationStatus==="pending"?"Заявка на рассмотрении":selected.applicationStatus==="rejected"?"Заявка отклонена":"Подать заявку"}</button>}
+            {joinGuidance&&<section className="meeting-feedback" role="status"><h3>Как работает заявка</h3><p>Организатор сначала рассмотрит твой отклик. После одобрения вы увидите контакты друг друга и сможете договориться о встрече.</p><button className="primary full" disabled={actionBusy} onClick={()=>void joinActivity(true)}>Понятно, подать заявку</button><button className="text-button" onClick={()=>setJoinGuidance(false)}>Пока не отправлять</button></section>}
+            {!joinGuidance&&selected.organizerId !== currentUserId && <button className="primary full" disabled={actionBusy || selected.moderationHidden || selected.status !== "open" || new Date(selected.date).getTime() <= clock || ["pending","approved","rejected"].includes(selected.applicationStatus??"")} onClick={() => void joinActivity()}>{selected.applicationStatus==="approved"?"Вы участвуете":selected.applicationStatus==="pending"?"Заявка на рассмотрении":selected.applicationStatus==="rejected"?"Заявка отклонена":"Подать заявку"}</button>}
           </article>
         </div>
       )}
-      {viewedUser&&<PublicProfileModal key={viewedUser} userId={viewedUser} currentUserId={currentUserId} onClose={()=>setViewedUser(null)} onActivity={id=>{setViewedUser(null);void openActivity(id);}}/>}
+      {viewedUser&&<PublicProfileModal key={viewedUser} userId={viewedUser} currentUserId={currentUserId} reviewActivityId={reviewActivityId} onChanged={()=>{void loadMine();void loadApplications();void loadActivities(false);}} onClose={()=>{setViewedUser(null);setReviewActivityId(undefined);setFeedbackRevision(v=>v+1);}} onActivity={id=>{setViewedUser(null);void openActivity(id);}}/>}
     </div>
     </FavoriteActions.Provider></ProfileOpener.Provider>
   );

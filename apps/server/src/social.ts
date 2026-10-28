@@ -1,3 +1,4 @@
+import {blockedBetween} from "./blocks.js";
 import { mayReview, terminal } from "./lifecycle.js";
 import { verifiedContact } from "./contacts.js";
 import { checkContent, isModerator } from "./moderation.js";
@@ -24,6 +25,7 @@ export function approvedIn(db: Database, activity: Activity, userId: string) {
 }
 export function canSeeContact(db: Database, viewer: string, target: User) {
   if (viewer === target.id) return true;
+  if(blockedBetween(db,viewer,target.id))return false;
   if (target.suspended || db.users.find(user=>user.id===viewer)?.suspended) return false;
   if (!verifiedContact(target)) return false;
   if (friendshipBetween(db, viewer, target.id)?.status === "accepted") return true;
@@ -40,7 +42,7 @@ export function installSocialRoutes(app: Express, currentUser: (req: import("exp
       const query = String(req.query.q ?? "").trim().replace(/^@/, "").toLowerCase();
       if (!/^[a-z0-9_]{3,24}$/.test(query)) return res.status(400).json({ message: "Введите хотя бы 3 символа ника СХОДКИ" });
       const db = await readDatabase();
-      res.json(db.users.filter(user => !user.suspended && user.age >= 16 && user.nickname?.startsWith(query) && user.id !== currentUser(req)).slice(0, 30).map(user => publicProfile(db, user)));
+      res.json(db.users.filter(user => !user.suspended && !blockedBetween(db,currentUser(req),user.id) && user.age >= 16 && user.nickname?.startsWith(query) && user.id !== currentUser(req)).slice(0, 30).map(user => publicProfile(db, user)));
     } catch (error) { next(error); }
   });
   app.get("/api/friends", async (req, res, next) => {
@@ -56,6 +58,7 @@ export function installSocialRoutes(app: Express, currentUser: (req: import("exp
     try {
       const db = await readDatabase(); const viewer = currentUser(req); const target = String(req.body.userId ?? "");
       if (!db.users.find(user => user.id === viewer)?.nickname) return res.status(400).json({ message: "Сначала выберите ник СХОДКИ в профиле" });
+      if(blockedBetween(db,viewer,target))return res.status(403).json({message:"Запрос в друзья этому пользователю недоступен"});
       if (viewer === target) return res.status(400).json({ message: "Это ваш профиль" });
       if (!db.users.some(user => user.id === target && user.age >= 16 && user.nickname)) return res.status(404).json({ message: "Пользователь с заполненным профилем не найден" });
       if (friendshipBetween(db, viewer, target)) return res.status(409).json({ message: "Запрос уже существует. Проверьте входящие" });
@@ -67,6 +70,7 @@ export function installSocialRoutes(app: Express, currentUser: (req: import("exp
     try {
       const db = await readDatabase(); const item = (db.friendships ?? []).find(item => item.id === req.params.id);
       if (!item || item.to !== currentUser(req)) return res.status(403).json({ message: "Принять запрос может только получатель" });
+      if(blockedBetween(db,item.from,item.to))return res.status(403).json({message:"Принять запрос нельзя: действует блокировка"});
       if (req.body.status !== "accepted") return res.status(400).json({ message: "Некорректный статус" });
       item.status = "accepted"; await writeDatabase(db); res.json(item);
     } catch (error) { next(error); }
@@ -90,6 +94,8 @@ export function installSocialRoutes(app: Express, currentUser: (req: import("exp
         !allReviews.some(review => review.authorId === viewer && review.activityId === activity.id))
         .map(activity => ({ id: activity.id, title: activity.title, date: activity.date }));
       res.json({ user: publicProfile(db, user),
+        blockedByMe:(db.blocks??[]).some(b=>b.from===viewer&&b.to===user.id),interactionBlocked:blockedBetween(db,viewer,user.id),
+        excludableActivities:db.activities.filter(a=>a.organizerId===viewer&&["open","full"].includes(a.status)&&Date.parse(a.date)>Date.now()&&db.applications.some(p=>p.activityId===a.id&&p.userId===user.id&&p.status==="approved")).map(a=>({id:a.id,title:a.title})),
         contact: canSeeContact(db, viewer, user) && user.telegramContact ? { telegram: user.telegramContact } : null,
         friendship: relation ? { id: relation.id, status: relation.status, incoming: relation.to === viewer } : null,
         activities: db.activities.filter(activity => activity.organizerId === user.id && !terminal(activity) && new Date(activity.date).getTime() > Date.now()).sort((a,b) => a.date.localeCompare(b.date)).map(activity => visibleActivity(activity, false)),
