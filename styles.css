@@ -47,3 +47,115 @@
 .skeleton-card{display:grid;gap:14px;padding:22px;border:var(--line);border-radius:20px;margin:14px 3px 18px 0;background:var(--paper)}
 .skeleton-card i{display:block;height:13px;width:80%;border-radius:8px;background:var(--blue);opacity:.55}
 .skeleton-card i:first-child{width:44%;height:22px}.skeleton-card i:last-child{width:60%}
+
+.meeting-feedback{padding:20px;margin:20px 3px 24px 0;border:var(--line);border-radius:20px;background:var(--blue);box-shadow:var(--shadow)}
+.meeting-feedback h3{margin:10px 0;font-size:19px}.meeting-feedback p{font-size:13px;line-height:1.7}.meeting-feedback .history-note{font-size:11px;margin:10px 0 16px}
+.feedback-person,.blocked-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-top:var(--line)}
+.feedback-person strong,.blocked-row strong{font-size:13px;overflow-wrap:anywhere}.feedback-person .secondary,.blocked-row .secondary{font-size:11px;flex-shrink:0;padding:10px 12px}
+.blocked-row>span{min-width:0}.blocked-row small{display:block;font-size:11px;margin-top:5px;overflow-wrap:anywhere}
+.block-controls{border-top:var(--line);border-bottom:var(--line);padding:14px 0;margin:24px 0}.block-controls .notification-toggle{margin:10px 0}
+
+/* Shared layout: stable text columns, balanced controls, and compact action groups. */
+button,a,summary{overflow-wrap:anywhere}
+button{max-width:100%;min-width:0}
+.primary,.secondary,.choice{white-space:normal;word-break:normal;max-width:100%}
+.text-button{text-decoration:none;line-height:1.5;border-radius:12px;padding:10px 12px;text-align:center}
+.text-button:hover:not(:disabled){background:#2926240a}
+.request-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch}
+.request-actions>button{width:100%;min-width:0;height:100%;margin:0}
+.request-actions>button:only-child{grid-column:1/-1}
+.person-row>span.person-avatar{flex:0 0 32px}
+.person-row>span:not(.person-avatar){flex:1;min-width:0}
+.person-row strong,.person-row small{overflow-wrap:anywhere;line-height:1.5}
+.public-person,.profile-identity,.profile-toolbar,.wizard-toolbar,.section-heading{min-width:0}
+.public-person>div,.profile-identity>div,.account-photo-row>div,.reminder-card>span:last-child{min-width:0;overflow-wrap:anywhere}
+.public-person h2,.profile-identity h1{overflow-wrap:anywhere;word-break:normal}
+.public-person p{overflow-wrap:anywhere;line-height:1.6}
+.public-contact{border:var(--line);border-radius:18px;padding:16px;margin:20px 0}
+.public-contact h3{margin:0 0 12px}
+.public-contact .history-note{margin:10px 0 14px}
+.public-contact .history-note:last-child{margin-bottom:0}
+.public-contact .contact-link{display:flex;width:100%;min-height:48px}
+.public-contact .friend-status{display:inline-flex;align-items:center;min-height:30px;padding:5px 10px;margin:0;border-radius:12px;background:var(--blue);font-weight:600}
+.public-contact>.text-button{width:100%;border:var(--line);background:var(--paper);margin-top:8px}
+.profile-actions{border:var(--line);border-radius:18px;margin:16px 0 24px;overflow:hidden}
+.profile-actions>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px;padding:14px 16px;list-style:none;cursor:pointer;font-size:12px;font-weight:600;line-height:1.5}
+.profile-actions>summary::-webkit-details-marker{display:none}
+.profile-actions[open]>summary{border-bottom:var(--line)}
+.profile-actions[open]>summary svg{transform:rotate(180deg)}
+.profile-actions-list{display:grid;gap:0}
+.profile-actions-list>.text-button,.profile-actions-list>.block-controls>.text-button{display:flex;align-items:center;justify-content:flex-start;width:100%;min-height:48px;padding:14px 16px;border:0;border-radius:0;margin:0;text-align:left;font-size:12px}
+.profile-actions-list>.text-button+.block-controls,.profile-actions-list>.block-controls+.text-button{border-top:1px solid #29262426}
+.profile-actions .block-controls{margin:0;padding:0;border:0}
+.profile-actions .block-controls>p{padding:0 16px;font-size:12px;line-height:1.7}
+.profile-actions .block-controls>.secondary{width:calc(100% - 32px);margin:12px 16px}
+.profile-actions .block-controls .notification-toggle{margin:12px 16px;padding:12px}
+.profile-actions .block-controls .request-actions{margin:12px 16px 16px}
+.public-review{display:grid;gap:10px}
+.public-review p,.public-review .history-note{margin:0}
+.public-review>.text-button{justify-self:end;min-height:44px;padding:8px 10px;font-size:11px}
+.report-button{max-width:100%;white-space:normal;text-align:left}
+.blocked-row,.feedback-person{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}
+.blocked-row>span,.feedback-person>strong{min-width:0;overflow-wrap:anywhere}
+.feedback-person>.secondary,.blocked-row>.secondary{max-width:150px;white-space:normal;line-height:1.5;min-height:44px}
+.modal .close{width:44px;height:44px;right:12px;top:10px}
+.modal{scroll-padding-top:16px;scroll-padding-bottom:24px}
+.modal dl>div{align-items:start}
+.modal dd a,.modal dd span,.contact-link{overflow-wrap:anywhere}
+.plans-heading{min-width:0}
+.plans-heading h1{min-width:0;flex:1;font-size:clamp(24px,7.3vw,29px)}
+.saved-plans{flex-shrink:0}
+.saved-plans:has(.count-badge){border-radius:24px}
+.section-heading .count-badge,.friend-group .count-badge{margin-left:0}
+.friend-group h3{display:flex;align-items:center;gap:8px;line-height:1.5}
+.friend-actions .text-button{border:var(--line);background:var(--paper)}
+.friend-item-accepted .friend-actions{flex:0 0 auto}
+.friend-item-accepted .person-row{min-width:0}
+.sports-options label{max-width:100%;line-height:1.5;overflow-wrap:anywhere}
+.notification-toggle>span{min-width:0;overflow-wrap:anywhere}
+.form label,.form-row>*,.moderation-actions>*{min-width:0}
+.moderation-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:10px}
+.moderation-actions>button{width:100%;min-height:46px}
+.account-stats>div{min-width:0;overflow-wrap:anywhere}
+.notice,.account-feedback{overflow-wrap:anywhere}
+@media(max-width:360px){
+ .modal{padding-left:16px;padding-right:16px}
+ .public-person{gap:12px;padding:16px;border-radius:20px}
+ .public-person .account-photo{width:56px;height:56px}
+ .public-person h2{font-size:24px}
+ .detail-hero{padding:18px}
+ .modal dl>div{grid-template-columns:72px minmax(0,1fr);gap:10px}
+ .blocked-row,.feedback-person{grid-template-columns:minmax(0,1fr)}
+ .blocked-row>.secondary,.feedback-person>.secondary{width:100%;max-width:none}
+ .account-photo-row{flex-wrap:wrap;gap:12px}
+ .account-photo-row>div{flex:1 1 160px}
+ .wizard-toolbar{align-items:flex-start}
+ .wizard-toolbar>span{max-width:65%;text-align:right;line-height:1.5}
+ .meeting-feedback{padding:16px}
+ .meeting-feedback .request-actions{gap:8px}
+ .meeting-feedback .request-actions>button{padding:11px 8px;font-size:12px}
+ .friend-item-accepted{gap:8px;padding:12px}
+ .friend-remove{padding:8px;font-size:11px}
+}
+
+body{min-width:0}
+@media(max-width:360px){
+ .public-person{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+ .public-person h2{font-size:22px;line-height:1.2;letter-spacing:-.4px}
+}
+.profile-actions>summary:focus-visible{outline-offset:-4px}
+
+.primary,.secondary,.choice{overflow-wrap:normal}
+@media(max-width:420px){
+ .profile-actions .block-controls .request-actions{grid-template-columns:minmax(0,1fr)}
+}
+
+.friend-item .person-row small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal .close{position:sticky;top:0;right:auto;margin:-48px 0 4px auto;z-index:3}
+.friend-item-accepted .person-row strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.sport-pill,.interest-tag{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.meetup-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));align-items:stretch}
+.meetup-tools>button{min-width:0;width:100%;height:100%}
+.finish-actions p{margin:0}
+.meetup-modal>.report-button{justify-content:center;width:100%;min-height:44px;margin:12px 0;border:1px solid #29262440;border-radius:14px}
