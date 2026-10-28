@@ -1,4 +1,5 @@
 import "./config.js";
+import {DONATION_URL,DONATION_BUTTON,DONATION_TEXT} from "./donations.js";
 import { Bot, Context, Keyboard } from "@maxhub/max-bot-api";
 
 export interface Notification {
@@ -131,7 +132,7 @@ export function startMaxBot(): (() => void) | undefined {
 
   bot.on("bot_started", sendWelcome);
   bot.command("start", sendWelcome);
-  bot.command("support", async (ctx) => { await ctx.reply("«СХОДКА» бесплатна. Добровольная поддержка поможет нам развивать проект. Способ оплаты пока готовим."); });
+  bot.command("support", async (ctx) => { await ctx.reply(DONATION_TEXT,{attachments:[Keyboard.inlineKeyboard([[Keyboard.button.link(DONATION_BUTTON,DONATION_URL)]])]}); });
   bot.command("help", async (ctx) => {
     await ctx.reply(
       "Команды:\n/start — открыть приветствие\n/help — показать справку",
