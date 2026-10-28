@@ -25,3 +25,25 @@
 .friend-remove{min-height:44px;padding:8px 10px;border:var(--line);border-radius:14px;background:transparent;font-size:11px;line-height:1.4}
 .friend-remove:hover:not(:disabled){background:var(--blue)}
 .friend-avatar{display:grid;place-items:center;width:42px;height:42px;flex-shrink:0;border:var(--line);border-radius:50%;background:var(--blue);font-size:17px;font-weight:700}
+
+.plans-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0 26px}
+.plans-heading h1{font-size:29px;margin:0;letter-spacing:-.8px}
+.saved-plans{display:flex;align-items:center;justify-content:center;gap:7px;min-width:48px;min-height:48px;border:var(--line);border-radius:50%;background:var(--paper);padding:11px}
+.count-badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;border:var(--line);border-radius:12px;background:var(--blue);font-size:11px;font-weight:600;flex-shrink:0}
+.plans-requests,.plans-history{border-top:var(--line);border-bottom:var(--line);margin:20px 0}
+.plans-history{margin-top:32px}
+.plans-requests summary,.plans-history summary{display:flex;align-items:center;gap:10px;min-height:60px;padding:12px 0;font-size:14px;font-weight:600;list-style:none;cursor:pointer}
+.plans-requests summary::-webkit-details-marker,.plans-history summary::-webkit-details-marker{display:none}
+.plans-requests summary>svg,.plans-history summary>svg{margin-left:auto}
+.plans-requests[open] summary>svg,.plans-history[open] summary>svg{transform:rotate(180deg)}
+.compact-requests .request-card{margin:0 0 15px;padding:16px;border-radius:18px}
+.compact-requests .person-row small{line-height:1.6;overflow-wrap:anywhere}
+.empty-state{margin:16px 0;padding:22px 18px;border:1px dashed var(--edge);border-radius:20px;text-align:left}
+.empty-state h3{font-size:17px;margin:0 0 9px}
+.empty-state p{font-size:13px;line-height:1.7;margin:0 0 16px}
+.empty-state p:last-child{margin-bottom:0}
+.empty-state .secondary{min-height:46px}
+.loading-cards{margin:20px 0;font-size:12px}
+.skeleton-card{display:grid;gap:14px;padding:22px;border:var(--line);border-radius:20px;margin:14px 3px 18px 0;background:var(--paper)}
+.skeleton-card i{display:block;height:13px;width:80%;border-radius:8px;background:var(--blue);opacity:.55}
+.skeleton-card i:first-child{width:44%;height:22px}.skeleton-card i:last-child{width:60%}

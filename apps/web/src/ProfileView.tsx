@@ -3,11 +3,11 @@ import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
 import { Icon } from "./Icon";
 import { api, type Profile } from "./api";
 
-export function ProfileView({ profile, organized, applications, onSave, onHistory, moderator, onModeration, onSupport }: {
-  profile: Profile; organized: number; applications: number;
+export function ProfileView({ profile, organized, applications, onSave, onHistory, moderator, onModeration, onSupport, initialEditing=false }: {
+  profile: Profile; organized: number; applications: number; initialEditing?:boolean;
   onSave: (patch: Record<string, unknown>) => Promise<void>; onHistory: () => void; moderator:boolean; onModeration:()=>void; onSupport:()=>void;
 }) {
-  const [editing,setEditing]=useState(false);
+  const [editing,setEditing]=useState(initialEditing);
   const [linkUrl,setLinkUrl]=useState("");
   const [nickname,setNickname]=useState(profile.nickname??"");
   useEffect(()=>{setNickname(profile.nickname??"");},[profile.nickname]);

@@ -9,6 +9,14 @@ export function syncTelegramContact(db:Database,ownerId:string,username?:string)
 }
 export async function refreshTelegramContacts(ownerId:string,username?:string){const db=await readDatabase();if(syncTelegramContact(db,ownerId,username))await writeDatabase(db);}
 export function verifiedContact(user?:User){return Boolean(user?.telegramContact&&user.telegramOwnerId?.startsWith("telegram:"));}
+export function missingProfileFields(user?:User){
+ const missing:string[]=[];
+ if(!user?.name?.trim())missing.push("имя");
+ if(!user?.nickname||!/^[a-z][a-z0-9_]{2,23}$/.test(user.nickname))missing.push("ник СХОДКИ");
+ if(!user||!Number.isInteger(user.age)||user.age<16||user.age>100)missing.push("возраст от 16 лет");
+ if(!verifiedContact(user))missing.push("подтверждённый Telegram-контакт");
+ return missing;
+}
 export const CONTACT_REQUIRED="Для обмена контактами установите имя пользователя @username в Telegram и заново откройте приложение. В MAX сначала привяжите Telegram в профиле.";
 export async function acceptTelegramLink(text:string,chatId:number,username?:string){
  const match=/^\/start(?:@\w+)?\s+link_([A-Za-z0-9_-]{40,50})$/.exec(text);if(!match)return false;
