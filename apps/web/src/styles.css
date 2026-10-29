@@ -214,3 +214,19 @@ body{min-width:0}
 .detail-place>span{min-width:0;overflow-wrap:anywhere}
 .detail-level{font-size:11px;line-height:1.5;opacity:.75}
 @media(max-width:360px){.section-identity h1{font-size:26px}.site-header{padding:22px 16px}.event-body h3{font-size:26px}.my-reviews .public-review{padding:16px}.detail-hero{padding:18px}.meetup-modal .detail-hero h2{font-size:28px}}
+/* Profile controls share one row; neither overlaps the participant card. */
+.public-profile{padding-top:12px}
+.profile-modal-toolbar{position:sticky;top:0;display:flex;align-items:center;justify-content:flex-end;gap:10px;min-height:56px;margin:0 0 14px;padding:4px 0 8px;background:var(--paper);z-index:5}
+.profile-modal-toolbar>.close{position:static;top:auto;right:auto;margin:0;width:44px;height:44px;flex-shrink:0}
+.profile-modal-toolbar>.profile-actions{position:relative;border:0;margin:0;overflow:visible}
+.profile-modal-toolbar>.profile-actions>summary{display:flex;align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;padding:0;border:var(--line);border-radius:50%;background:var(--paper);font-size:26px;line-height:1}
+.profile-modal-toolbar>.profile-actions[open]>summary{border-bottom:var(--line)}
+.profile-modal-toolbar .profile-actions-list{position:absolute;right:0;top:52px;width:min(300px,calc(100vw - 80px));max-height:60svh;overflow-y:auto;overscroll-behavior:contain;background:var(--paper);border:var(--line);border-radius:16px;box-shadow:2px 3px 0 var(--edge)}
+.public-profile .public-person{padding:20px;box-shadow:2px 2px 0 var(--edge)}
+.site-header{min-height:80px;padding:20px 20px 16px;gap:12px}
+.compact-brand{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0}
+.compact-brand .wordmark{font-size:21px;line-height:1.2;letter-spacing:-.6px}
+.compact-brand .city-label{font-size:10px;line-height:1.5}
+.compact-brand .back-button{width:28px;justify-content:center;min-height:40px;flex-shrink:0}
+.tab-title{font-size:29px;line-height:1.2;font-weight:800;letter-spacing:-.7px;margin:12px 0 24px}
+@media(max-width:360px){.site-header{padding:18px 16px 14px}.compact-brand .wordmark{font-size:19px}.tab-title{font-size:27px}.public-profile .public-person{padding:16px}}
