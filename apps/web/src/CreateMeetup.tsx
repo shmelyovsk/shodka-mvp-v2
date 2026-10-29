@@ -4,7 +4,7 @@ import { Icon } from "./Icon";
 
 type Draft = Record<string, string>;
 const initial: Draft = {category:"sport",format:"offline",title:"",sport:"",customSport:"",date:"",district:"",publicPlace:"",exactAddress:"",connectionLink:"",capacity:"4",level:"any",price:"0",minAge:"",maxAge:"",equipment:"",description:"",gamePlatform:""};
-const headings=[<>Собери<br/>свою компанию.</>,<>Когда<br/>и где?</>,<>Осталось<br/>пару деталей.</>];
+const headings=["Создать сходку","Время и место","Детали встречи"];
 const descriptions=["Начнём с того, чем хочется заняться.","Договоримся о времени и месте встречи.","Помоги участникам понять, чего ожидать."];
 export function CreateMeetup({onPublish}:{onPublish:(draft:Draft)=>Promise<boolean>}) {
  const [draft,setDraft]=useState<Draft>(initial),[step,setStep]=useState(0),[review,setReview]=useState(false),[busy,setBusy]=useState(false);
@@ -17,7 +17,7 @@ export function CreateMeetup({onPublish}:{onPublish:(draft:Draft)=>Promise<boole
  return <section className="create-page"><div className="wizard-toolbar"><button type="button" className="text-button" disabled={busy||(!review&&step===0)} onClick={back}><Icon name="arrow-left"/>Назад</button><span>{review?"Проверка перед публикацией":`Шаг ${step+1} из 3`}</span></div>
  <ol className="wizard-steps" aria-label="Этапы создания">{["Занятие","Встреча","Детали"].map((label,index)=><li key={label} className={index===step?"current":index<step?"done":""} aria-current={index===step?"step":undefined}><span>{index<step?<Icon name="check" size={14}/>:index+1}</span>{label}</li>)}</ol>
  <form ref={form} className="form wizard-form" noValidate onSubmit={submit}><fieldset disabled={busy} className="account-fields">
- {!review&&<div className="intro-panel"><h1>{headings[step]}</h1><p>{descriptions[step]}</p></div>}
+ {!review&&<div className="page-heading"><h1>{headings[step]}</h1><p>{descriptions[step]}</p></div>}
  {!review&&step===0&&<>
  <div><span className="field-label">Что планируешь?</span><div className="choice-row">{[["sport","Спорт"],["games","Игры"]].map(([value,label])=><button key={value} type="button" className="choice" aria-pressed={draft.category===value} onClick={()=>setDraft(d=>({...d,category:value,sport:"",customSport:""}))}>{label}</button>)}</div></div>
  <label>Занятие<select required {...field("sport")}><option value="" disabled>Выбери занятие</option>{(draft.category==="games"?GAME_OPTIONS:SPORT_OPTIONS).map(sport=><option key={sport}>{sport}</option>)}<option>Другое</option></select></label>

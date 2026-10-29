@@ -31,7 +31,7 @@ export function verifyServer() {
   if (!checkedServer) checkedServer = (async()=>{
     let response: Response;
     try { response=await fetch(`${API_URL}/api/capabilities`,{cache:"no-store",signal:requestTimeout(65000)}); }
-    catch { throw new Error("Сервер недоступен или просыпается. Подождите немного и откройте приложение заново"); }
+    catch { throw new Error("Не удалось загрузить приложение. Подождите немного и попробуйте ещё раз"); }
     if(!response.ok || !response.headers.get("content-type")?.includes("application/json"))throw new Error(VERSION_MESSAGE);
     const meta=await response.json().catch(()=>null);
     if(!meta || meta.apiVersion !== 4 || !Array.isArray(meta.features) || !meta.features.includes("verifiedContacts") || !meta.features.includes("meetupLifecycle") || !meta.features.includes("communityFilter"))throw new Error(VERSION_MESSAGE);
