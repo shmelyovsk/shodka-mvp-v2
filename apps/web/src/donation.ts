@@ -1,7 +1,7 @@
 import type { MouseEvent } from "react";
 
 // Same address as the working /support button. Never embed the payment page.
-export const DONATION_URL = "https://yoomoney.ru/quickpay/fundraise/button?billNumber=1L700LK69PT.261028";
+export const DONATION_URL = "https://pay.cloudtips.ru/p/8bd09662";
 
 export function openDonation(event: MouseEvent<HTMLAnchorElement>) {
   if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -17,3 +17,4 @@ export function openDonation(event: MouseEvent<HTMLAnchorElement>) {
     try { bridge.openLink(DONATION_URL); event.preventDefault(); } catch { /* Keep the ordinary browser link as fallback. */ }
   }
 }
+
