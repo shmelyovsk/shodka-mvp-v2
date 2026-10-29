@@ -99,7 +99,7 @@ export function installSocialRoutes(app: Express, currentUser: (req: import("exp
         contact: canSeeContact(db, viewer, user) && user.telegramContact ? { telegram: user.telegramContact } : null,
         friendship: relation ? { id: relation.id, status: relation.status, incoming: relation.to === viewer } : null,
         activities: db.activities.filter(activity => activity.organizerId === user.id && !terminal(activity) && new Date(activity.date).getTime() > Date.now()).sort((a,b) => a.date.localeCompare(b.date)).map(activity => visibleActivity(activity, false)),
-        reviews: reviews.slice(0, 50).map(review => ({ ...review, author: publicProfile(db, db.users.find(item => item.id === review.authorId)) })),
+        reviews: reviews.slice(0, 50).map(review => ({ ...review, activityTitle: db.activities.find(activity => activity.id === review.activityId)?.title, author: publicProfile(db, db.users.find(item => item.id === review.authorId)) })),
         eligibleActivities,
       });
     } catch (error) { next(error); }
