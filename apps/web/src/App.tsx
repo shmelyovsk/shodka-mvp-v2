@@ -324,7 +324,7 @@ function App() {
     <ProfileOpener.Provider value={setViewedUser}><FavoriteActions.Provider value={{ids:new Set(favorites.map(a=>a.id)),toggle:id=>void toggleFavorite(id)}}>
     <div className="app-shell">
       <header className="site-header">
-        {(tab === "profile" || tab === "moderation" || tab === "support") ? <button className="back-button" onClick={() => navigate("catalog")}><NavIcon kind="back" />К сходкам</button> : <div className="brand-lockup"><span className="wordmark">СХОДКА</span><span className="city-label">Москва · 16+</span></div>}
+        <div className="section-identity">{["profile","moderation","support"].includes(tab)&&<button className="back-button" aria-label="Вернуться к сходкам" onClick={()=>navigate("catalog")}><NavIcon kind="back"/></button>}<div><h1>{{catalog:"Сходки",create:"Создать сходку",friends:"Друзья",mine:"Мои встречи",favorites:"Избранное",profile:"Мой профиль",moderation:"Модерация",support:"Обращения"}[tab]}</h1><span className="city-label">Москва · 16+</span></div></div>
         <button className="profile-button" aria-label="Открыть личный кабинет" aria-current={tab === "profile" ? "page" : undefined} onClick={() => navigate("profile")}>
           <PersonAvatar name={demo ? (currentUserId === "user-1" ? "Ира" : "Саша") : profile.name} avatarUrl={demo ? undefined : profile.avatarUrl} size="large" />
         </button>
@@ -340,7 +340,7 @@ function App() {
         {(profile.moderationWarning||profile.suspended)&&<div className="notice" role="alert">{profile.suspended?"Ваш аккаунт ограничен модерацией. Публикации и заявки недоступны.":profile.moderationWarning}</div>}
         {tab === "support" && moderator && <SupportView currentUserId={currentUserId}/>}
         {tab === "moderation" && moderator && <ModerationView currentUserId={currentUserId} onChanged={()=>void loadActivities(false)}/>}
-        {(tab==="mine"||tab==="favorites")&&<div className="plans-heading"><h1>{tab==="favorites"?"Избранное":"Мои встречи"}</h1><button className="saved-plans" aria-label={tab==="favorites"?"Вернуться к моим встречам":"Открыть избранное"} onClick={()=>navigate(tab==="favorites"?"mine":"favorites")}><Icon name={tab==="favorites"?"arrow-left":"bookmark"}/>{tab!=="favorites"&&favorites.length>0&&<span className="count-badge">{favorites.length}</span>}</button></div>}
+        {(tab==="mine"||tab==="favorites")&&<div className="plans-heading"><span className="plans-caption">{tab==="favorites"?"Сохранённые встречи":"Твои планы и заявки"}</span><button className="saved-plans" aria-label={tab==="favorites"?"Вернуться к моим встречам":"Открыть избранное"} onClick={()=>navigate(tab==="favorites"?"mine":"favorites")}><Icon name={tab==="favorites"?"arrow-left":"bookmark"}/>{tab!=="favorites"&&favorites.length>0&&<span className="count-badge">{favorites.length}</span>}</button></div>}
 
         {message && <button className="notice" onClick={() => setMessage("")}>{message} ×</button>}
         {tab === "profile" && <ProfileView key={currentUserId+(pendingIntent?"-complete":"")} initialEditing={Boolean(pendingIntent)} profile={profile} organized={mine.filter(item => item.relation === "organizer").length} applications={mine.filter(item => item.relation === "participant").length} onSave={saveProfile} onHistory={() => { setHistoryOpen(true); navigate("mine"); }} moderator={moderator} onSupport={()=>navigate("support")} onModeration={()=>navigate("moderation")} />}
@@ -350,7 +350,7 @@ function App() {
 
         {tab === "catalog" && (
           <>
-            <header className="page-heading"><h1>Сходки</h1><p>Выбери встречу и присоединяйся.</p></header>
+            
             <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все'],['sport','Спорт'],['games','Компьютерные игры']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} onClick={()=>{setCategoryFilter(value);setSport("Все");}}>{label}</button>)}</div>
             <div className="filter-group">
               <span className="filter-label">Когда</span>
@@ -405,7 +405,7 @@ function App() {
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <article className="modal meetup-modal" role="dialog" aria-modal="true" aria-label={selected.title} onClick={(event) => event.stopPropagation()}>
             <button className="close" aria-label="Закрыть сходку" onClick={() => setSelected(null)}><Icon name="x"/></button>
-            <section className="detail-hero"><div className="detail-time"><strong>{formatTime(selected.date)}</strong><span>{scheduleDay(selected.date)}</span></div><span className="event-sport">{selected.sport}</span><h2>{selected.title}</h2><p>{selected.format==="online"?"Онлайн, из дома":selected.publicPlace+" · "+selected.district}</p><p>{levelNames[selected.level]}</p></section>
+            <section className="detail-hero"><div className="detail-date"><time dateTime={selected.date}>{scheduleDay(selected.date)}, {formatTime(selected.date)}</time><span>{new Date(selected.date).toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"})}</span></div><span className="event-sport">{selected.sport}</span><h2>{selected.title}</h2><p className="detail-place"><Icon name="map-pin" size={18}/><span>{selected.format==="online"?"Онлайн, из дома":[selected.publicPlace,selected.district].filter(Boolean).join(" · ")}</span></p><span className="detail-level">{levelNames[selected.level]}</span></section>
             <p className="modal-lead">{selected.description}</p>
             {selected.organizer && (
               <button className="organizer-profile profile-inline" onClick={()=>setViewedUser(selected.organizerId)}>
