@@ -4,6 +4,7 @@ import { SupportView } from "./SupportView";
 import { ModerationView } from "./ModerationView";
 import { FriendsView } from "./FriendsView";
 import { PublicProfileModal } from "./PublicProfileModal";
+import { StartupScreen } from "./StartupScreen";
 import { CreateMeetup } from "./CreateMeetup";
 import { AfterMeetings } from "./AfterMeetings";
 import { Icon } from "./Icon";
@@ -316,7 +317,7 @@ function App() {
     setMessage(userId === "user-1" ? "Демо-профиль: Ира" : "Демо-профиль: Саша");
   }
 
-  if (!authReady) return <div className="app-shell welcome-shell"><section className="welcome-card" role="status"><h1>СХОДКА</h1><p>Проверяем вход…</p><p>При первом открытии сервер может просыпаться около минуты. Пожалуйста, подождите.</p><button className="secondary" onClick={()=>window.location.reload()}>Повторить загрузку</button></section></div>;
+  if (!authReady) return <StartupScreen/>;
   if (!profile) return <div className="app-shell welcome-shell"><section className="welcome-card"><span className="eyebrow">Москва · 16+</span><h1>Сходка</h1><p>{authError}</p><button className="primary" onClick={()=>window.location.reload()}>Повторить подключение</button><p>Откройте приложение из бота MAX или Telegram.</p><a href="https://t.me/skhodkaa_bot">Telegram</a> · <a href="https://max.ru/t221_hakaton_max_bot">MAX</a></section></div>;
 
   return (
@@ -349,7 +350,7 @@ function App() {
 
         {tab === "catalog" && (
           <>
-            <section className="intro-panel home-intro"><h1>Есть место<br/>для тебя.</h1><p>Присоединяйся к тем, кто уже собирается.</p></section>
+            <header className="page-heading"><h1>Сходки</h1><p>Выбери встречу и присоединяйся.</p></header>
             <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все'],['sport','Спорт'],['games','Компьютерные игры']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} onClick={()=>{setCategoryFilter(value);setSport("Все");}}>{label}</button>)}</div>
             <div className="filter-group">
               <span className="filter-label">Когда</span>

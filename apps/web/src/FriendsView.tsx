@@ -17,7 +17,7 @@ export function FriendsView({ currentUserId, onProfile }: {currentUserId: string
     catch(error) { setMessage(error instanceof Error ? error.message : "Не удалось изменить запрос"); }
     finally { setBusy(false); }
   }
-  return <section className="friends-page"><section className="intro-panel"><h1>Свои люди.<br/>Общие планы.</h1><p>Сохраняй знакомства — собраться ещё раз будет проще.</p></section>
+  return <section className="friends-page"><header className="page-heading"><h1>Друзья</h1><p>Знакомые, с которыми хочется встретиться снова.</p></header>
     <p className="history-note">После принятия запроса вы увидите подтверждённые Telegram-контакты друг друга. Для остальных пользователей они скрыты.</p>
     <form className="friend-search" onSubmit={async event => {event.preventDefault();setBusy(true);setMessage("");try {const data=await api<PublicUser[]>(`/api/people?q=${encodeURIComponent(query)}`,{},currentUserId);setResults(data);if(!data.length)setMessage("По такому нику никого не нашли");}catch(error){setMessage(error instanceof Error?error.message:"Ошибка поиска");}finally{setBusy(false);}}}>
       <label htmlFor="nickname-search">Найти по нику СХОДКИ</label><div><input id="nickname-search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="@username" maxLength={25}/><button className="primary search-button" disabled={busy} aria-label="Найти друга"><Icon name="search" size={20}/></button></div>

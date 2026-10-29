@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SPORT_OPTIONS, GAME_OPTIONS } from "./options";
+import { MyReviews } from "./MyReviews";
 import { BlockedUsers } from "./BlockedUsers";
 import { Icon } from "./Icon";
 import { api, type Profile } from "./api";
@@ -79,7 +80,8 @@ export function ProfileView({ profile, organized, applications, onSave, onHistor
       {message && <p className="account-feedback" role="status">{message}</p>}
     </form>}
     {!editing&&<section className="account-history"><h2>Ваша история</h2><div className="account-stats"><div><strong>{organized}</strong><span>Организовано</span></div><div><strong>{applications}</strong><span>Заявок на встречи</span></div></div><button className="secondary full" onClick={onHistory}>Посмотреть мои сходки</button><p className="account-caption">Заявка не подтверждает фактическое посещение встречи.</p></section>}
-    {!editing&&<section className="profile-contact profile-donation"><h2>Помочь СХОДКЕ</h2><p>Сервис бесплатный. Если хочешь помочь оплачивать сервер и развивать проект, поддержи нас любой суммой. Это добровольно и не влияет на возможности приложения.</p><a className="primary full" href="https://yoomoney.ru/quickpay/fundraise/button?billNumber=1L700LK69PT.261028" target="_blank" rel="noopener noreferrer">Поддержать СХОДКУ<Icon name="arrow-up-right" size={18}/></a><small>Откроется страница ЮMoney</small></section>}
+    {!editing&&<section className="profile-contact profile-donation"><h2>Помочь СХОДКЕ</h2><p>Сервис бесплатный. Если хочешь помочь оплачивать сервер и развивать проект, поддержи нас любой суммой. Это добровольно и не влияет на возможности приложения.</p><div className="donation-widget"><iframe title="Поддержать СХОДКУ через ЮMoney" src="https://yoomoney.ru/quickpay/fundraise/button?billNumber=1L700LK69PT.261028" width="330" height="50" loading="lazy" referrerPolicy="strict-origin-when-cross-origin"/></div></section>}
+    {!editing&&<MyReviews userId={profile.id}/>}
     {!editing&&<BlockedUsers currentUserId={profile.id}/>}
     {!editing&&moderator&&<button className="secondary full friends-entry" onClick={onSupport}>Обращения: проблемы и идеи →</button>}
     {!editing&&moderator&&<button className="secondary full friends-entry" onClick={onModeration}>Модерация и жалобы →</button>}
