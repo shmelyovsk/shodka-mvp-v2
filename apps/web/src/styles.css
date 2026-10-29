@@ -170,8 +170,6 @@ body{min-width:0}
 .event-body h3{font-size:25px;line-height:1.2;letter-spacing:-.5px;margin:12px 0}
 .event-host{font-size:11px;line-height:1.6;opacity:.75}
 .event-body{box-shadow:2px 2px 0 var(--edge)}
-.donation-widget{display:flex;justify-content:center;max-width:100%;margin-top:20px;overflow:hidden;min-height:50px}
-.donation-widget iframe{display:block;border:0;width:330px;max-width:100%;height:50px;background:transparent}
 .public-profile{position:relative}
 .public-profile>.profile-actions{position:absolute;right:76px;top:22px;border:0;margin:0;overflow:visible;z-index:4}
 .public-profile>.profile-actions>summary{width:44px;min-height:44px;padding:0;justify-content:center;border:var(--line);border-radius:50%;background:var(--paper);font-size:26px;line-height:1}
@@ -179,10 +177,40 @@ body{min-width:0}
 .public-profile>.profile-actions>.profile-actions-list{position:absolute;right:0;top:52px;width:min(310px,calc(100vw - 80px));max-height:65svh;overflow:auto;overscroll-behavior:contain;border:var(--line);border-radius:16px;background:var(--paper);box-shadow:2px 3px 0 var(--edge)}
 .public-person{padding-top:12px}
 .public-review small{display:block;line-height:1.6;overflow-wrap:anywhere;margin:8px 0}
-.my-reviews .public-review{padding:18px 0;border-bottom:1px solid #29262426}
 .review-summary{font-size:14px;font-weight:600}
 @media(max-width:360px){.page-heading h1{font-size:27px}.event-body h3{font-size:23px}.public-profile>.profile-actions{right:70px}}
-.donation-widget{container-type:inline-size}
-.donation-widget iframe{width:330px;max-width:none;flex-shrink:0;transform-origin:center center}
-@container(max-width:329px){.donation-widget iframe{transform:scale(.84)}}
-@container(max-width:279px){.donation-widget iframe{transform:scale(.70)}}
+/* Unified section header: the page title appears once, beside the avatar. */
+.site-header{align-items:center;padding-top:24px;padding-bottom:26px;min-height:108px}
+.section-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.section-identity>div{min-width:0}
+.section-identity h1{font-size:30px;line-height:1.15;letter-spacing:-.8px;margin:0 0 7px;font-weight:800}
+.section-identity .city-label{display:block;font-size:11px;line-height:1.5;opacity:.7}
+.section-identity .back-button{width:32px;flex-shrink:0;justify-content:center}
+.plans-heading{margin:0 0 20px;min-height:44px}
+.plans-caption{font-size:13px;line-height:1.6;opacity:.7}
+.plans-heading .saved-plans{margin-left:auto}
+.page-heading h2{font-size:23px;margin:0 0 10px;line-height:1.25;letter-spacing:-.5px}
+.event-body h3{font-size:28px;line-height:1.18;letter-spacing:-.6px}
+.event-host{text-decoration:none;font-size:11px;line-height:1.6;opacity:.7}
+.event-host button{min-height:32px}
+.my-reviews .public-review{display:grid;gap:14px;padding:20px;margin:16px 0;min-height:0;border:var(--line);border-radius:18px;box-shadow:none}
+.review-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;min-width:0}
+.review-heading strong{font-size:14px;line-height:1.5;overflow-wrap:anywhere;min-width:0}
+.review-heading>span{font-size:13px;font-weight:600;line-height:1.5;white-space:nowrap;flex-shrink:0}
+.review-meta{display:grid;gap:4px;font-size:11px;line-height:1.6;opacity:.7;overflow-wrap:anywhere}
+.my-reviews .public-review p{font-size:14px;line-height:1.7;margin:0}
+.my-reviews .public-review>.text-button{padding:6px 0;min-height:44px;margin:0;text-decoration:none;opacity:.7;justify-self:end}
+.profile-donation{margin-top:28px}
+.meetup-modal{padding-top:16px}
+.meetup-modal>.close{position:sticky;top:0;right:auto;margin:0 0 16px auto;z-index:3}
+.detail-hero{display:grid;gap:16px;box-shadow:none;margin:0 0 24px;padding:22px;border-radius:22px}
+.detail-date{display:grid;gap:5px;padding-bottom:16px;border-bottom:1px solid #29262426}
+.detail-date time{font-size:18px;line-height:1.4;font-weight:700;overflow-wrap:anywhere}
+.detail-date>span{font-size:11px;line-height:1.5;opacity:.7}
+.detail-hero .event-sport{font-size:11px;line-height:1.5;margin-bottom:-8px}
+.meetup-modal .detail-hero h2{font-size:30px;line-height:1.17;margin:0;letter-spacing:-.7px;font-weight:800}
+.detail-hero .detail-place{display:flex;align-items:flex-start;gap:8px;line-height:1.6;margin:0;font-size:13px}
+.detail-place svg{margin-top:2px;flex-shrink:0}
+.detail-place>span{min-width:0;overflow-wrap:anywhere}
+.detail-level{font-size:11px;line-height:1.5;opacity:.75}
+@media(max-width:360px){.section-identity h1{font-size:26px}.site-header{padding:22px 16px}.event-body h3{font-size:26px}.my-reviews .public-review{padding:16px}.detail-hero{padding:18px}.meetup-modal .detail-hero h2{font-size:28px}}
