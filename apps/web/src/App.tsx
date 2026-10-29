@@ -324,7 +324,7 @@ function App() {
     <ProfileOpener.Provider value={setViewedUser}><FavoriteActions.Provider value={{ids:new Set(favorites.map(a=>a.id)),toggle:id=>void toggleFavorite(id)}}>
     <div className="app-shell">
       <header className="site-header">
-        <div className="section-identity">{["profile","moderation","support"].includes(tab)&&<button className="back-button" aria-label="Вернуться к сходкам" onClick={()=>navigate("catalog")}><NavIcon kind="back"/></button>}<div><h1>{{catalog:"Сходки",create:"Создать сходку",friends:"Друзья",mine:"Мои встречи",favorites:"Избранное",profile:"Мой профиль",moderation:"Модерация",support:"Обращения"}[tab]}</h1><span className="city-label">Москва · 16+</span></div></div>
+        <div className="compact-brand">{["profile","moderation","support"].includes(tab)&&<button className="back-button" aria-label="Вернуться к сходкам" onClick={()=>navigate("catalog")}><NavIcon kind="back"/></button>}<span className="wordmark">СХОДКА</span><span className="city-label">Москва · 16+</span></div>
         <button className="profile-button" aria-label="Открыть личный кабинет" aria-current={tab === "profile" ? "page" : undefined} onClick={() => navigate("profile")}>
           <PersonAvatar name={demo ? (currentUserId === "user-1" ? "Ира" : "Саша") : profile.name} avatarUrl={demo ? undefined : profile.avatarUrl} size="large" />
         </button>
@@ -337,6 +337,7 @@ function App() {
       </div>}
 
       <main>
+        <h1 className="tab-title">{{catalog:"Сходки",create:"Создать сходку",friends:"Друзья",mine:"Мои встречи",favorites:"Избранное",profile:"Мой профиль",moderation:"Модерация",support:"Обращения"}[tab]}</h1>
         {(profile.moderationWarning||profile.suspended)&&<div className="notice" role="alert">{profile.suspended?"Ваш аккаунт ограничен модерацией. Публикации и заявки недоступны.":profile.moderationWarning}</div>}
         {tab === "support" && moderator && <SupportView currentUserId={currentUserId}/>}
         {tab === "moderation" && moderator && <ModerationView currentUserId={currentUserId} onChanged={()=>void loadActivities(false)}/>}
