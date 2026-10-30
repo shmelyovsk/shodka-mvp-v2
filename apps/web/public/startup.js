@@ -1,9 +1,12 @@
 (function () {
   var root = document.getElementById('root');
   var failed = false;
+  var phrases=['Можно прийти одному. В этом и идея.','Проверяем, кто взял мяч.','Кто-то тоже ищет, с кем поиграть.'];
+  var phraseIndex=0;
+  var phraseTimer=setInterval(function(){var target=root.querySelector('.startup-phrase');if(target){phraseIndex=(phraseIndex+1)%phrases.length;target.textContent=phrases[phraseIndex];}},9000);
   function fail(code) {
     if (failed) return;
-    failed = true;
+    failed = true; clearInterval(phraseTimer);
     // Only a fixed diagnostic code and timestamp; no user data, URLs or auth tokens.
     try { localStorage.setItem('shodka-startup-error', JSON.stringify({code: code, at: new Date().toISOString()})); } catch (_) {}
     root.textContent = '';
@@ -15,7 +18,7 @@
     panel.appendChild(title); panel.appendChild(text); panel.appendChild(retry); panel.appendChild(detail); root.appendChild(panel);
   }
   var timer = setTimeout(function () { if (!root.dataset.mounted) fail('START_TIMEOUT'); }, 20000);
-  window.ShodkaStartup = {fail: fail, mounted: function () { clearTimeout(timer); root.dataset.mounted = 'true'; }};
+  window.ShodkaStartup = {fail: fail, mounted: function () { clearInterval(phraseTimer); clearTimeout(timer); root.dataset.mounted = 'true'; }};
   window.addEventListener('error', function (event) {
     if (event.target && event.target.tagName === 'SCRIPT') {
       var src = event.target.getAttribute('src') || '';
