@@ -14,8 +14,8 @@ export function ratingFor(db: Database, userId: string) {
 export function publicProfile(db: Database, user?: User) {
   if (!user) return undefined;
   if(user.suspended)return {id:user.id,name:"Профиль недоступен",age:0,ageGroup:"16+",rating:undefined,reviewsCount:0};
-  const { id, name, nickname, age, ageGroup, avatarUrl, bio, district, sports } = user;
-  return { id, name, nickname, age, ageGroup, avatarUrl, bio, district, sports, ...ratingFor(db, id) };
+  const { id, name, nickname, age, ageGroup, avatarUrl, bio, district, sports, gender } = user;
+  return { id, name, nickname, age, ageGroup, avatarUrl, bio, district, sports, gender, ...ratingFor(db, id) };
 }
 export function friendshipBetween(db: Database, a: string, b: string) {
   return (db.friendships ?? []).find(item => item.from === a && item.to === b || item.from === b && item.to === a);

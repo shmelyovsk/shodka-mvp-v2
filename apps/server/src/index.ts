@@ -99,6 +99,10 @@ app.patch("/api/me", async (req, res, next) => {
       if (typeof req.body[key] !== "string" || req.body[key].trim().length > max || (key === "name" && !req.body[key].trim())) return res.status(400).json({ message: "Проверьте имя, описание и район" });
       patch[key] = req.body[key].trim();
     }
+    if ("gender" in req.body) {
+      if (!["unspecified","female","male"].includes(req.body.gender)) return res.status(400).json({message:"Выберите пол из списка"});
+      patch.gender=req.body.gender;
+    }
     if ("sports" in req.body) {
       if (!Array.isArray(req.body.sports) || req.body.sports.length > 12 || req.body.sports.some((item: unknown) => typeof item !== "string" || !item.trim() || item.length > 50)) return res.status(400).json({ message: "Проверьте виды спорта" });
       patch.sports = [...new Set<string>(req.body.sports.map((item: string) => item.trim()))];
@@ -251,7 +255,10 @@ app.post("/api/activities", async (req, res, next) => {
     const profileMissing=missingProfileFields((await readDatabase()).users.find(u=>u.id===organizerId));if(profileMissing.length)return res.status(400).json({message:"Заполните профиль: "+profileMissing.join(", "),code:"PROFILE_INCOMPLETE",missing:profileMissing});
     const category = req.body.category ?? "sport";
     const format = req.body.format ?? "offline";
-    if (!["sport", "games"].includes(category) || !["offline", "online"].includes(format)) return res.status(400).json({ message: "Проверьте категорию и формат" });
+    if (!["sport", "games", "boardgames"].includes(category) || !["offline", "online"].includes(format)) return res.status(400).json({ message: "Проверьте категорию и формат" });
+    if(category === "sport" && format !== "offline") return res.status(400).json({message:"Спортивные встречи проходят очно"});
+    const audienceGender=req.body.audienceGender??"any";
+    if(!["any","female","male"].includes(audienceGender)) return res.status(400).json({message:"Проверьте, кого ждёте на встрече"});
     const required = ["title", "sport", "date", "level", "capacity", ...(format === "offline" ? ["district", "publicPlace"] : [])];
     const missing = required.filter((key) => !req.body[key]);
     if (missing.length) { const labels:Record<string,string>={title:"название",sport:"занятие",date:"дата и время",level:"уровень",capacity:"число участников",district:"район",publicPlace:category==="games"?"название клуба":"место встречи"}; return res.status(400).json({message:`Заполните поля: ${missing.map(key=>labels[key]??key).join(", ")}`}); }
@@ -300,7 +307,7 @@ app.post("/api/activities", async (req, res, next) => {
       id: nanoid(),
       title: String(req.body.title),
       sport: String(req.body.sport).trim(),
-      category, format, connectionLink, gamePlatform: String(req.body.gamePlatform ?? ""),
+      category, format, audienceGender, connectionLink: format === "online" ? connectionLink : undefined, gamePlatform: String(req.body.gamePlatform ?? ""),
       date: String(req.body.date),
       district: format === "online" ? "Онлайн" : String(req.body.district),
       publicPlace: format === "online" ? "Из дома" : String(req.body.publicPlace),
@@ -309,7 +316,7 @@ app.post("/api/activities", async (req, res, next) => {
       capacity,
       approvedCount: 1,
       price,
-      equipment: category === "games" ? "" : String(req.body.equipment ?? "Не требуется"),
+      equipment: category !== "sport" ? "" : String(req.body.equipment ?? "Не требуется"),
       description: String(req.body.description ?? ""),
       ageGroup: ageLimitLabel(minAge, maxAge),
       minAge,
@@ -346,6 +353,10 @@ app.post("/api/activities/:id/applications", async (req, res, next) => {
     }
     if (activity.maxAge !== undefined && user.age > activity.maxAge) {
       return res.status(409).json({ message: `Для этой сходки установлен возраст до ${activity.maxAge} лет` });
+    }
+    if(activity.audienceGender && activity.audienceGender!=="any") {
+      if(!user.gender || user.gender==="unspecified") return res.status(409).json({code:"GENDER_REQUIRED",message:"Укажите пол в профиле перед заявкой на эту встречу"});
+      if(user.gender!==activity.audienceGender) return res.status(409).json({code:"GENDER_MISMATCH",message:activity.audienceGender==="female"?"Эта встреча только для девушек":"Эта встреча только для парней"});
     }
     const existing = db.applications.find((item) => item.activityId === activity.id && item.userId === userId);
     if (existing && existing.status !== "withdrawn") return res.status(409).json({ message: "Заявка уже отправлена" });
@@ -424,6 +435,7 @@ app.patch("/api/applications/:id", async (req, res, next) => {
     const activity = db.activities.find((item) => item.id === application.activityId);
     if (!activity || activity.organizerId !== organizerId) return res.status(403).json({ message: "Недостаточно прав" });
     if(status==="approved"&&blockedBetween(db,organizerId,application.userId))return res.status(403).json({message:"Одобрение недоступно: между пользователями действует блокировка"});
+    if(status==="approved" && activity.audienceGender && activity.audienceGender!=="any" && db.users.find(u=>u.id===application.userId)?.gender!==activity.audienceGender) return res.status(409).json({message:"Пол в профиле участника не соответствует условиям встречи"});
     if(application.status==="withdrawn")return res.status(409).json({message:"Участник отозвал заявку. Дождитесь новой заявки"});
     if (terminal(activity) || new Date(activity.date).getTime() <= Date.now()) return res.status(409).json({ message: "Сходка завершена или отменена" });
     if(status==="approved"&&(!verifiedContact(db.users.find(u=>u.id===organizerId))||!verifiedContact(db.users.find(u=>u.id===application.userId))))return res.status(409).json({message:"Перед одобрением организатор и участник должны подтвердить Telegram-контакты в профиле"});

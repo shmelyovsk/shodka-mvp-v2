@@ -15,6 +15,7 @@ export interface User {
   level?: SkillLevel;
   notificationsEnabled?: boolean;
   nickname?: string;
+  gender?: "unspecified" | "female" | "male";
   telegramContact?: string;
   telegramOwnerId?: string;
   shareContact?: boolean;
@@ -31,7 +32,8 @@ export interface Activity {
   date: string;
   durationMinutes?: number;
   endedAt?: string;
-  category?: "sport" | "games";
+  category?: "sport" | "games" | "boardgames";
+  audienceGender?: "any" | "female" | "male";
   format?: "offline" | "online";
   connectionLink?: string;
   gamePlatform?: string;
