@@ -1,4 +1,5 @@
 export interface PublicUser {
+  gender?: "unspecified" | "female" | "male";
   id: string; name: string; nickname?: string; age: number; avatarUrl?: string;
   bio?: string; district?: string; sports?: string[]; level?: string; rating?: number; reviewsCount?: number;
 }

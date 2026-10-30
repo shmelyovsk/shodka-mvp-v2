@@ -12,6 +12,7 @@ export function platformHeaders(): Record<string, string> {
   return {};
 }
 export interface Profile {
+  gender?: "unspecified" | "female" | "male";
   id: string; name: string; age: number; avatarUrl?: string; platformAvatarUrl?: string;
   avatarSource?: "platform" | "custom"; bio?: string; district?: string; sports?: string[];
   level?: "beginner" | "any" | "intermediate"; notificationsEnabled?: boolean; nickname?: string; telegramContact?: string; telegramOwnerId?:string; shareContact?: boolean; suspended?:boolean; moderationWarning?:string;

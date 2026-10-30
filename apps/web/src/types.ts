@@ -5,7 +5,8 @@ export interface Activity {
   date: string;
   durationMinutes?: number;
   endedAt?: string;
-  category?: "sport" | "games";
+  category?: "sport" | "games" | "boardgames";
+  audienceGender?: "any" | "female" | "male";
   format?: "offline" | "online";
   connectionLink?: string;
   gamePlatform?: string;

@@ -23,6 +23,7 @@ export function PublicProfileModal({ userId, currentUserId, onClose, onActivity,
 </div></details>}<button className="close" aria-label="Закрыть профиль" onClick={onClose}>×</button></div>
     {!data?<p className="empty">{message||"Открываем профиль…"}</p>:<>
       <div className="public-person">{data.user.avatarUrl?<img className="account-photo" src={data.user.avatarUrl} alt="Фото участника"/>:<span className="account-photo account-initial">{data.user.name.slice(0,1)}</span>}<div><h2>{data.user.name}</h2><p>{data.user.nickname?`@${data.user.nickname}`:"Ник пока не выбран"}</p><p>{data.user.age?`${data.user.age} лет`:"Возраст не указан"}{data.user.district?` · ${data.user.district}`:""}</p></div></div>
+      {data.user.gender&&data.user.gender!=="unspecified"&&<p className="history-note">Пол: {data.user.gender==="female"?"женский":"мужской"}</p>}
       <p className="public-rating">{data.user.rating===undefined?"Пока нет отзывов":`★ ${data.user.rating.toFixed(1)} · ${(data.user.reviewsCount??0)} ${(data.user.reviewsCount??0)%100>=11&&(data.user.reviewsCount??0)%100<=14?"отзывов":(data.user.reviewsCount??0)%10===1?"отзыв":(data.user.reviewsCount??0)%10>=2&&(data.user.reviewsCount??0)%10<=4?"отзыва":"отзывов"}`}</p>
       {data.user.bio&&<p className="modal-lead">{data.user.bio}</p>}
       {!!data.user.sports?.length&&<div className="public-interests">{data.user.sports.map(sport=><span className="sport-pill" key={sport}>{sport}</span>)}</div>}
