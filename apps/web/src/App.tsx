@@ -4,6 +4,7 @@ import { SupportView } from "./SupportView";
 import { ModerationView } from "./ModerationView";
 import { FriendsView } from "./FriendsView";
 import { PublicProfileModal } from "./PublicProfileModal";
+import { AUDIENCE_LABELS } from "./options";
 import { StartupScreen } from "./StartupScreen";
 import { CreateMeetup } from "./CreateMeetup";
 import { AfterMeetings } from "./AfterMeetings";
@@ -118,6 +119,7 @@ function ActivityCard({activity,onOpen}:{activity:Activity;onOpen:()=>void}){
  return <article className={"schedule-event "+(activity.category==="games"?"gaming ":"")+(terminal(activity)?"quiet":"")}>
  <div className="time-column"><time dateTime={activity.date}>{formatTime(activity.date)}</time><span>{scheduleDay(activity.date)}</span></div>
  <div className="event-body"><div className="event-top"><span className="event-sport">{activity.sport}</span><button type="button" className="bookmark-button" aria-label={favorites.ids.has(activity.id)?"Убрать из избранного":"В избранное"} aria-pressed={favorites.ids.has(activity.id)} onClick={()=>favorites.toggle(activity.id)}><Icon name="bookmark" size={19}/></button></div>
+ {activity.audienceGender&&activity.audienceGender!=="any"&&<span className="audience-label">{AUDIENCE_LABELS[activity.audienceGender]}</span>}
  <h3><button className="card-title-button" onClick={onOpen}>{activity.title}</button></h3>
  <p className="event-place">{activity.format==="online"?"Онлайн, из дома":activity.publicPlace+" · "+activity.district}</p>
  <p className="event-level">{levelNames[activity.level]} · {activity.ageGroup}{activity.minAge!==undefined&&activity.maxAge!==undefined?" лет":""}</p>
@@ -177,7 +179,7 @@ function App() {
   }, []);
   async function saveProfile(patch: Record<string, unknown>) {
     const result = await api<{ user: Profile }>("/api/me", { method: "PATCH", body: JSON.stringify(patch) }, currentUserId);
-    for(const key of ["nickname"] as const) {
+    for(const key of ["nickname","gender"] as const) {
       if(typeof patch[key]==="string") {
         const expected=(patch[key] as string).trim().replace(/^@/,"").toLowerCase();
         if((result.user[key]??"").toLowerCase()!==expected)throw new Error("Сервер не сохранил новые поля. Проверьте обновление сервера и попробуйте снова");
@@ -259,6 +261,10 @@ function App() {
 
   async function joinActivity(understood=false) {
     if (!selected || actionBusy || !requireProfile({kind:"join",id:selected.id})) return;
+    if(selected.audienceGender&&selected.audienceGender!=="any"){
+      if(!profile?.gender||profile.gender==="unspecified"){const intent={kind:"join" as const,id:selected.id};setPendingIntent(intent);try{sessionStorage.setItem("shodka-profile-intent",JSON.stringify(intent));}catch{}setSelected(null);setTab("profile");setMessage("Укажи пол в профиле, чтобы подать заявку на эту встречу");return;}
+      if(profile.gender!==selected.audienceGender){setMessage(AUDIENCE_LABELS[selected.audienceGender]);return;}
+    }
     let seen=hintSeenUser===currentUserId;try{seen=seen||localStorage.getItem("shodka-first-application:"+currentUserId)==="1";}catch{}
     if(!seen&&!understood){setJoinGuidance(true);return;}
     if(understood){try{localStorage.setItem("shodka-first-application:"+currentUserId,"1");}catch{}setHintSeenUser(currentUserId);setJoinGuidance(false);}
@@ -352,7 +358,7 @@ function App() {
         {tab === "catalog" && (
           <>
             
-            <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все'],['sport','Спорт'],['games','Компьютерные игры']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} onClick={()=>{setCategoryFilter(value);setSport("Все");}}>{label}</button>)}</div>
+            <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все'],['sport','Спорт'],['games','Компьютерные'],['boardgames','Настольные']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} onClick={()=>{setCategoryFilter(value);setSport("Все");}}>{label}</button>)}</div>
             <div className="filter-group">
               <span className="filter-label">Когда</span>
               <div className="chips compact">
@@ -406,7 +412,7 @@ function App() {
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <article className="modal meetup-modal" role="dialog" aria-modal="true" aria-label={selected.title} onClick={(event) => event.stopPropagation()}>
             <button className="close" aria-label="Закрыть сходку" onClick={() => setSelected(null)}><Icon name="x"/></button>
-            <section className="detail-hero"><div className="detail-date"><time dateTime={selected.date}>{scheduleDay(selected.date)}, {formatTime(selected.date)}</time><span>{new Date(selected.date).toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"})}</span></div><span className="event-sport">{selected.sport}</span><h2>{selected.title}</h2><p className="detail-place"><Icon name="map-pin" size={18}/><span>{selected.format==="online"?"Онлайн, из дома":[selected.publicPlace,selected.district].filter(Boolean).join(" · ")}</span></p><span className="detail-level">{levelNames[selected.level]}</span></section>
+            <section className="detail-hero"><div className="detail-date"><time dateTime={selected.date}>{scheduleDay(selected.date)}, {formatTime(selected.date)}</time><span>{new Date(selected.date).toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"})}</span></div><span className="event-sport">{selected.sport}</span><h2>{selected.title}</h2><p className="detail-place"><Icon name="map-pin" size={18}/><span>{selected.format==="online"?"Онлайн, из дома":[selected.publicPlace,selected.district].filter(Boolean).join(" · ")}</span></p><span className="detail-level">{levelNames[selected.level]}</span>{selected.audienceGender&&selected.audienceGender!=="any"&&<span className="audience-label">{AUDIENCE_LABELS[selected.audienceGender]}</span>}</section>
             <p className="modal-lead">{selected.description}</p>
             {selected.organizer && (
               <button className="organizer-profile profile-inline" onClick={()=>setViewedUser(selected.organizerId)}>
@@ -430,7 +436,7 @@ function App() {
               )}
               <div><dt>Кого ждём</dt><dd>{levelNames[selected.level]}</dd></div>
               <div><dt>Возраст</dt><dd>{selected.ageGroup}</dd></div>
-              {selected.category!=="games"&&<div><dt>Инвентарь</dt><dd>{selected.equipment||"Не требуется"}</dd></div>}
+              {(!selected.category||selected.category==="sport")&&<div><dt>Инвентарь</dt><dd>{selected.equipment||"Не требуется"}</dd></div>}
               <div><dt>Стоимость</dt><dd>{selected.price ? `${selected.price} ₽ с человека` : "Бесплатно"}</dd></div>
             </dl>
             {selected.organizerId!==currentUserId&&<button className="secondary full contact-organizer" onClick={()=>setViewedUser(selected.organizerId)}>Профиль и контакт организатора</button>}
