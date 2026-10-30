@@ -5,6 +5,7 @@ import { ModerationView } from "./ModerationView";
 import { FriendsView } from "./FriendsView";
 import { PublicProfileModal } from "./PublicProfileModal";
 import { AUDIENCE_LABELS } from "./options";
+import { FilterSheet } from "./FilterSheet";
 import { StartupScreen } from "./StartupScreen";
 import { CreateMeetup } from "./CreateMeetup";
 import { AfterMeetings } from "./AfterMeetings";
@@ -239,7 +240,8 @@ function App() {
 
   const activeApplications=applications.filter(p=>p.status==="pending"&&p.activity&&!terminal(p.activity)&&!p.activity.moderationHidden&&Date.parse(p.activity.date)>clock);
   const hasCatalogFilters=sport!=="Все"||dateFilter!=="all"||Boolean(place.trim())||categoryFilter!=="all"||friendsOnly||formatFilter!=="all"||freeOnly||favoritesOnly;
-  const sports = useMemo(() => ["Все", ...Array.from(new Set(activities.map((item) => item.sport)))], [activities]);
+  const sports = useMemo(() => ["Все", ...Array.from(new Set(activities.filter(item=>categoryFilter==="all"||(item.category??"sport")===categoryFilter).map(item=>item.sport))).sort((a,b)=>a.localeCompare(b,"ru"))], [activities,categoryFilter]);
+  const advancedFilterCount=[sport!=="Все",Boolean(place.trim()),friendsOnly,categoryFilter!=="sport"&&formatFilter!=="all",freeOnly,favoritesOnly].filter(Boolean).length;
   const visible = activities.filter((item) => {
     const matchesSport = sport === "Все" || item.sport === sport;
     const placeQuery = place.trim().toLocaleLowerCase("ru");
@@ -358,7 +360,7 @@ function App() {
         {tab === "catalog" && (
           <>
             
-            <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все'],['sport','Спорт'],['games','Компьютерные'],['boardgames','Настольные']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} onClick={()=>{setCategoryFilter(value);setSport("Все");}}>{label}</button>)}</div>
+            <div className="catalog-categories" role="group" aria-label="Категории">{([['all','Все встречи'],['sport','Спорт'],['games','Видеоигры'],['boardgames','Настолки']] as const).map(([value,label])=><button key={value} className={categoryFilter===value?"chip active":"chip"} aria-pressed={categoryFilter===value} onClick={()=>{setCategoryFilter(value);setSport("Все");if(value==="sport")setFormatFilter("all");}}>{label}</button>)}</div>
             <div className="filter-group">
               <span className="filter-label">Когда</span>
               <div className="chips compact">
@@ -367,19 +369,8 @@ function App() {
                 ))}
               </div>
             </div>
-            <details className="filter-drawer" open={filtersOpen} onToggle={event=>setFiltersOpen(event.currentTarget.open)}><summary><span><Icon name="sliders-horizontal" size={18}/>Настроить поиск</span><Icon name="chevron-down" size={17}/></summary><label className="friends-filter"><input type="checkbox" checked={friendsOnly} onChange={event=>setFriendsOnly(event.target.checked)}/> Организуют друзья</label>
-            <div className="filter-group">
-              <span className="filter-label">Занятие</span>
-              <div className="chips compact">
-                {sports.map((item) => <button className={sport === item ? "chip active" : "chip"} onClick={() => setSport(item)} key={item}>{item}</button>)}
-              </div>
-            </div>
-            <label className="place-filter">
-              <span className="filter-label">Где</span>
-              <input value={place} onChange={(event) => setPlace(event.target.value)} placeholder="Район, метро или место" />
-            </label>
-            <div className="catalog-extra-filters"><label>Формат<select value={formatFilter} onChange={e=>setFormatFilter(e.target.value)}><option value="all">Любой</option><option value="offline">Офлайн</option><option value="online">Онлайн</option></select></label><label className="friends-filter"><input type="checkbox" checked={freeOnly} onChange={e=>setFreeOnly(e.target.checked)}/>Есть свободные места</label><label className="friends-filter"><input type="checkbox" checked={favoritesOnly} onChange={e=>setFavoritesOnly(e.target.checked)}/>Только избранное</label><button className="text-button" onClick={()=>{setSport("Все");setDateFilter("all");setPlace("");setCategoryFilter("all");setFriendsOnly(false);setFormatFilter("all");setFreeOnly(false);setFavoritesOnly(false);}}>Сбросить фильтры</button></div>
-            </details>
+            <button type="button" className="open-filters" onClick={()=>setFiltersOpen(true)} aria-haspopup="dialog"><Icon name="sliders-horizontal" size={18}/><span>Фильтры</span>{advancedFilterCount>0&&<span className="count-badge">{advancedFilterCount}</span>}</button>
+            {filtersOpen&&<FilterSheet category={categoryFilter} sports={sports} value={{sport,place,format:formatFilter,friends:friendsOnly,free:freeOnly,favorites:favoritesOnly}} onClose={()=>setFiltersOpen(false)} onApply={value=>{setSport(value.sport);setPlace(value.place);setFormatFilter(categoryFilter==="sport"?"all":value.format);setFriendsOnly(value.friends);setFreeOnly(value.free);setFavoritesOnly(value.favorites);setFiltersOpen(false);}}/>}
             <section className="section-heading"><h2>Ищут компанию</h2><span>{visible.length}</span></section>
             {loading ? <LoadingCards/> : catalogError?<LoadError onRetry={()=>void loadActivities()}/>: (
               <div className="activity-list">
